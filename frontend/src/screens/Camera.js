@@ -47,14 +47,31 @@ export async function showCameraScreen(container) {
         <video id="camera-video" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover"></video>
         <canvas id="calibration-canvas" class="hidden"></canvas>
 
-        <!-- Overlay -->
-        <div class="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-          <div id="overlay" class="overlay-transition border-4 border-overlay-red rounded-2xl" style="width: min(70vw, 280px); height: min(70vw, 280px);">
-            <div id="overlay-status" class="absolute -top-10 left-0 right-0 text-center">
-              <span class="inline-flex items-center px-4 py-1.5 rounded-full text-xs font-semibold bg-red-500/90 text-white shadow-lg">
-                <span class="w-2 h-2 bg-white rounded-full mr-2 animate-pulse"></span>
-                Ajusta la cámara
+        <!-- Dark overlay outside capture area -->
+        <div class="absolute inset-0 z-10 pointer-events-none">
+          <div class="absolute inset-0 bg-black/40"></div>
+          <div id="capture-area" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" style="width: min(85vw, 340px); height: min(110vw, 440px);">
+            <div class="absolute inset-0 bg-transparent border-4 border-overlay-red rounded-xl overlay-transition"></div>
+            
+            <!-- Corner markers for alignment -->
+            <div class="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white -mt-1 -ml-1"></div>
+            <div class="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white -mt-1 -mr-1"></div>
+            <div class="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-white -mb-1 -ml-1"></div>
+            <div class="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white -mb-1 -mr-1"></div>
+            
+            <!-- Status indicator -->
+            <div id="overlay-status" class="absolute -top-12 left-0 right-0 text-center">
+              <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-red-500/90 text-white shadow-lg">
+                <span class="w-2.5 h-2.5 bg-white rounded-full mr-2 animate-pulse"></span>
+                Enfoca la cartilla
               </span>
+            </div>
+            
+            <!-- Instructions -->
+            <div class="absolute -bottom-16 left-0 right-0 text-center">
+              <p class="text-xs text-gray-300 bg-black/50 px-3 py-1.5 rounded-full inline-block">
+                Alinea las marcas + en las esquinas
+              </p>
             </div>
           </div>
         </div>
@@ -90,7 +107,8 @@ export async function showCameraScreen(container) {
   const video = document.getElementById('camera-video');
   const canvas = document.getElementById('calibration-canvas');
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  const overlay = document.getElementById('overlay');
+  const captureArea = document.getElementById('capture-area');
+  const overlayBorder = captureArea.querySelector('.border-4');
   const overlayStatus = document.getElementById('overlay-status');
   const captureBtn = document.getElementById('capture-btn');
   const captureCounter = document.getElementById('capture-counter');
@@ -154,25 +172,27 @@ export async function showCameraScreen(container) {
     console.log('Video loaded, starting calibration');
     startCalibration(video, canvas, ctx, (calibrated) => {
       if (calibrated) {
-        overlay.classList.remove('border-overlay-red');
-        overlay.classList.add('border-overlay-green');
+        overlayBorder.classList.remove('border-overlay-red');
+        overlayBorder.classList.add('border-overlay-green');
         overlayStatus.innerHTML = `
-          <span class="inline-flex items-center px-4 py-1.5 rounded-full text-xs font-semibold bg-green-500/90 text-white shadow-lg">
-            <span class="w-2 h-2 bg-white rounded-full mr-2"></span>
-            Listo para capturar
+          <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-green-500/90 text-white shadow-lg">
+            <span class="w-2.5 h-2.5 bg-white rounded-full mr-2"></span>
+            ¡Listo! Toca para capturar
           </span>
         `;
         captureBtn.disabled = false;
+        captureBtn.classList.add('animate-pulse');
       } else {
-        overlay.classList.remove('border-overlay-green');
-        overlay.classList.add('border-overlay-red');
+        overlayBorder.classList.remove('border-overlay-green');
+        overlayBorder.classList.add('border-overlay-red');
         overlayStatus.innerHTML = `
-          <span class="inline-flex items-center px-4 py-1.5 rounded-full text-xs font-semibold bg-red-500/90 text-white shadow-lg">
-            <span class="w-2 h-2 bg-white rounded-full mr-2 animate-pulse"></span>
-            Ajusta la cámara
+          <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-red-500/90 text-white shadow-lg">
+            <span class="w-2.5 h-2.5 bg-white rounded-full mr-2 animate-pulse"></span>
+            Enfoca la cartilla
           </span>
         `;
         captureBtn.disabled = true;
+        captureBtn.classList.remove('animate-pulse');
       }
     });
   });

@@ -1,10 +1,13 @@
-const ROI_SIZE = parseInt(import.meta.env.VITE_ROI_SIZE) || 320;
-const SHARPNESS_THRESHOLD = parseInt(import.meta.env.VITE_LAPLACIAN_THRESHOLD) || 80;
-const STABILITY_THRESHOLD = parseFloat(import.meta.env.VITE_STABILITY_THRESHOLD) || 0.15;
+const ROI_SIZE = parseInt(import.meta.env.VITE_ROI_SIZE) || 400;
+const SHARPNESS_THRESHOLD = parseInt(import.meta.env.VITE_LAPLACIAN_THRESHOLD) || 120;
+const STABILITY_THRESHOLD = parseFloat(import.meta.env.VITE_STABILITY_THRESHOLD) || 0.12;
+const FRAME_HISTORY = 3;
 
-let prevFrame = null;
+let prevFrames = [];
 let calibrationInterval = null;
 let isCalibrated = false;
+let stableFrameCount = 0;
+const REQUIRED_STABLE_FRAMES = 5;
 
 export function computeLaplacianVariance(pixels, size) {
   const gray = new Uint8Array(size * size);
@@ -14,14 +17,15 @@ export function computeLaplacianVariance(pixels, size) {
 
   let sum = 0;
   let count = 0;
-  for (let y = 1; y < size - 1; y++) {
-    for (let x = 1; x < size - 1; x++) {
+  const step = 2;
+  for (let y = step; y < size - step; y += step) {
+    for (let x = step; x < size - step; x += step) {
       const idx = y * size + x;
       const laplacian =
-        gray[idx - 1] +
-        gray[idx + 1] +
-        gray[idx - size] +
-        gray[idx + size] -
+        gray[idx - step] +
+        gray[idx + step] +
+        gray[idx - size * step] +
+        gray[idx + size * step] -
         4 * gray[idx];
       sum += laplacian * laplacian;
       count++;
@@ -36,7 +40,7 @@ export function computeFrameDiff(current, previous) {
 
   let diff = 0;
   const sampleSize = Math.min(current.length, previous.length);
-  const step = Math.max(1, Math.floor(sampleSize / 1000));
+  const step = Math.max(4, Math.floor(sampleSize / 500));
 
   for (let i = 0; i < sampleSize; i += step) {
     diff += Math.abs(current[i] - previous[i]);
@@ -45,36 +49,101 @@ export function computeFrameDiff(current, previous) {
   return diff / (sampleSize / step) / 255;
 }
 
+export function detectCorners(pixels, size) {
+  const gray = new Uint8Array(size * size);
+  for (let i = 0; i < pixels.length; i += 4) {
+    gray[i / 4] = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
+  }
+
+  const cornerSize = Math.floor(size * 0.15);
+  const corners = [
+    { x: 0, y: 0 },
+    { x: size - cornerSize, y: 0 },
+    { x: 0, y: size - cornerSize },
+    { x: size - cornerSize, y: size - cornerSize }
+  ];
+
+  let cornerScore = 0;
+  for (const corner of corners) {
+    let darkPixels = 0;
+    let totalPixels = 0;
+    for (let y = corner.y; y < corner.y + cornerSize; y += 2) {
+      for (let x = corner.x; x < corner.x + cornerSize; x += 2) {
+        if (gray[y * size + x] < 60) {
+          darkPixels++;
+        }
+        totalPixels++;
+      }
+    }
+    if (darkPixels / totalPixels > 0.3) {
+      cornerScore++;
+    }
+  }
+
+  return cornerScore >= 3;
+}
+
 export function checkCalibration(videoElement, canvas, ctx) {
   if (!videoElement || videoElement.readyState < 2) return false;
 
-  ctx.drawImage(videoElement, 0, 0, ROI_SIZE, ROI_SIZE);
-  const imageData = ctx.getImageData(0, 0, ROI_SIZE, ROI_SIZE);
+  const videoWidth = videoElement.videoWidth;
+  const videoHeight = videoElement.videoHeight;
+  
+  const drawWidth = Math.min(videoWidth, ROI_SIZE);
+  const drawHeight = Math.min(videoHeight, ROI_SIZE);
+  const offsetX = Math.floor((videoWidth - drawWidth) / 2);
+  const offsetY = Math.floor((videoHeight - drawHeight) / 2);
+
+  canvas.width = drawWidth;
+  canvas.height = drawHeight;
+  ctx.drawImage(videoElement, offsetX, offsetY, drawWidth, drawHeight, 0, 0, drawWidth, drawHeight);
+  
+  const imageData = ctx.getImageData(0, 0, drawWidth, drawHeight);
   const pixels = imageData.data;
 
-  const variance = computeLaplacianVariance(pixels, ROI_SIZE);
-  const diff = computeFrameDiff(pixels, prevFrame);
+  const variance = computeLaplacianVariance(pixels, drawWidth);
+  
+  let avgDiff = 0;
+  if (prevFrames.length > 0) {
+    for (const prevFrame of prevFrames) {
+      avgDiff += computeFrameDiff(pixels, prevFrame);
+    }
+    avgDiff /= prevFrames.length;
+  }
 
   const isSharp = variance > SHARPNESS_THRESHOLD;
-  const isStable = diff < STABILITY_THRESHOLD;
+  const isStable = avgDiff < STABILITY_THRESHOLD;
+  const hasCorners = detectCorners(pixels, drawWidth);
 
-  prevFrame = new Uint8Array(pixels);
+  if (isSharp && isStable) {
+    stableFrameCount++;
+  } else {
+    stableFrameCount = 0;
+  }
 
-  return isSharp && isStable;
+  if (prevFrames.length >= FRAME_HISTORY) {
+    prevFrames.shift();
+  }
+  prevFrames.push(new Uint8Array(pixels));
+
+  return isSharp && isStable && stableFrameCount >= REQUIRED_STABLE_FRAMES;
 }
 
 export function startCalibration(videoElement, canvas, ctx, onCalibrationChange) {
   stopCalibration();
+  stableFrameCount = 0;
+  prevFrames = [];
 
   const check = () => {
     const calibrated = checkCalibration(videoElement, canvas, ctx);
 
     if (calibrated && !isCalibrated) {
       isCalibrated = true;
-      if (navigator.vibrate) navigator.vibrate(50);
+      if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
       onCalibrationChange(true);
     } else if (!calibrated && isCalibrated) {
       isCalibrated = false;
+      stableFrameCount = 0;
       onCalibrationChange(false);
     }
   };
@@ -89,7 +158,7 @@ export function startCalibration(videoElement, canvas, ctx, onCalibrationChange)
     videoElement.requestVideoFrameCallback(loop);
     calibrationInterval = { stop: () => { running = false; } };
   } else {
-    calibrationInterval = setInterval(check, 200);
+    calibrationInterval = setInterval(check, 150);
   }
 }
 
@@ -102,8 +171,9 @@ export function stopCalibration() {
     }
     calibrationInterval = null;
   }
-  prevFrame = null;
+  prevFrames = [];
   isCalibrated = false;
+  stableFrameCount = 0;
 }
 
 export function isCurrentlyCalibrated() {
@@ -111,6 +181,7 @@ export function isCurrentlyCalibrated() {
 }
 
 export function resetCalibration() {
-  prevFrame = null;
+  prevFrames = [];
   isCalibrated = false;
+  stableFrameCount = 0;
 }
