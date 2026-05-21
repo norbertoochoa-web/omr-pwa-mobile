@@ -6,3 +6,4 @@ dist/
 package-lock.json
 errores/
 imagen.jpeg
+mock-api/data/uploads/
