@@ -197,6 +197,7 @@ export async function showCameraScreen(container) {
       await addToQueue(imageData, currentSessionId);
       captureCount++;
       captureCounter.textContent = `${captureCount} captura${captureCount !== 1 ? 's' : ''}`;
+      downloadBtn.disabled = false;
       showToast('Captura guardada');
 
       if (navigator.vibrate) navigator.vibrate(30);
@@ -205,9 +206,6 @@ export async function showCameraScreen(container) {
     }
 
     resetCalibration();
-    setTimeout(() => {
-      captureBtn.disabled = true;
-    }, 100);
   });
 
   logoutBtn.addEventListener('click', async () => {
@@ -230,7 +228,16 @@ export async function showCameraScreen(container) {
 
   downloadBtn.addEventListener('click', async () => {
     if (!currentSessionId) return;
+    
+    const stats = await getQueueStats();
+    if (stats.pending > 0 || stats.uploading > 0) {
+      showToast('Sincronizando capturas...');
+      await syncQueue();
+      updateQueueBadge();
+    }
+    
     try {
+      showToast('Generando archivo...');
       const blob = await downloadSessionTxt(currentSessionId);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -239,7 +246,8 @@ export async function showCameraScreen(container) {
       a.click();
       URL.revokeObjectURL(url);
       showToast('Archivo descargado');
-    } catch {
+    } catch (err) {
+      console.error('Download error:', err);
       showToast('Error al descargar');
     }
   });
