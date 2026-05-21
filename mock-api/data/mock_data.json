@@ -1,0 +1,25 @@
+{
+  "users": [
+    {
+      "id": "user_001",
+      "email": "admin@test.com",
+      "password": "password123",
+      "subscription": {
+        "status": "ACTIVE",
+        "max_images": 1000,
+        "expires": "2026-12-31T23:59:59Z"
+      }
+    },
+    {
+      "id": "user_002",
+      "email": "inactive@test.com",
+      "password": "password123",
+      "subscription": {
+        "status": "EXPIRED",
+        "max_images": 0,
+        "expires": "2025-01-01T00:00:00Z"
+      }
+    }
+  ],
+  "sessions": []
+}
