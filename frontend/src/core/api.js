@@ -4,9 +4,9 @@ function getBaseUrl() {
   if (apiUrl) return apiUrl;
 
   const envUrl = import.meta.env.VITE_API_URL;
-  if (envUrl && !envUrl.includes('localhost')) return envUrl;
+  if (envUrl) return envUrl;
 
-  return `${window.location.protocol}//${window.location.hostname}:3001/api/v1`;
+  return `${window.location.protocol}//${window.location.hostname}:8000/api/v1`;
 }
 
 const BASE_URL = getBaseUrl();
