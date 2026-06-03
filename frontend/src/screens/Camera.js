@@ -245,11 +245,11 @@ export async function showCameraScreen(container) {
     let queueId;
     try {
       queueId = await addToQueue(imageData, sessionId);
-      downloadBtn.disabled = false;
       if (navigator.vibrate) navigator.vibrate(30);
     } catch (err) {
       console.error('[QUEUE] error:', err);
     }
+    downloadBtn.disabled = false;
 
     captureCount++;
     captureCounter.textContent = `${captureCount} captura${captureCount !== 1 ? 's' : ''}`;
@@ -327,14 +327,20 @@ export async function showCameraScreen(container) {
     try {
       showToast('Generando archivo...');
       const blob = await downloadSessionTxt(currentSessionId);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${currentSessionId.slice(0, 8)}.txt`;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
+      const fileName = `${currentSessionId.slice(0, 8)}.txt`;
+
+      if (navigator.canShare && navigator.canShare({ files: [new File([blob], fileName, { type: 'text/plain' })] })) {
+        await navigator.share({ files: [new File([blob], fileName, { type: 'text/plain' })] });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
+      }
       showToast('Archivo descargado');
     } catch (err) {
       console.error('[DOWNLOAD] error:', err);
