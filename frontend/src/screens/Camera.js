@@ -256,7 +256,7 @@ export async function showCameraScreen(container) {
     showToast('Procesando...');
 
     // --- UPLOAD DIRECTO ---
-    const baseUrl = import.meta.env.VITE_API_URL || `${location.protocol}//${location.hostname}:3001/api/v1`;
+    const baseUrl = import.meta.env.VITE_API_URL || `${location.protocol}//${location.hostname}:8000/api/v1`;
     const token = sessionStorage.getItem('omr_jwt_token');
     if (!token) {
       setStatus('Error: sesión expirada', true);
