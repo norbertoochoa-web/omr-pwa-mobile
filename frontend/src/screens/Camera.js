@@ -117,7 +117,21 @@ export async function showCameraScreen(container) {
   const queueBtn = document.getElementById('queue-btn');
   const queueBadge = document.getElementById('queue-badge');
 
-  setStatus('Conectando al servidor...');
+  const sessionLabel = document.getElementById('session-label');
+  const apiUrlLabel = document.getElementById('api-url-label');
+  apiUrlLabel.textContent = import.meta.env.VITE_API_URL || `${location.protocol}//${location.hostname}:8000/api/v1`;
+
+  try {
+    const result = await createSession(`Sesión ${new Date().toLocaleString()}`, user.user_id);
+    currentSessionId = result.session_token;
+    sessionLabel.textContent = `Sesión: ${currentSessionId.slice(-8)}`;
+    setStatus(`Sesión lista (${currentSessionId.slice(-6)})`);
+  } catch (err) {
+    console.error('[SESSION] create failed:', err);
+    currentSessionId = crypto.randomUUID();
+    sessionLabel.textContent = `Sesión local: ${currentSessionId.slice(-8)}`;
+    setStatus(`Sesión local (${currentSessionId.slice(-6)})`, true);
+  }
 
   canvas.width = 320;
   canvas.height = 320;
@@ -134,13 +148,14 @@ export async function showCameraScreen(container) {
     console.log('Camera stream started successfully');
   } catch (err) {
     console.error('[CAMERA] error:', err.name || '', err.message);
+    setStatus(`Sesión: ${currentSessionId.slice(-6)} | Cámara no disponible`, true);
     showToast('Usar galería en vez de cámara');
 
-    container.querySelector('video')?.remove();
-    container.querySelector('canvas')?.remove();
-    const overlay = container.querySelector('.absolute.inset-0.z-10');
-    if (overlay) overlay.innerHTML = `
-      <div class="absolute inset-0 flex items-center justify-center bg-gray-900">
+    const videoContainer = container.querySelector('.flex-1.relative');
+    if (videoContainer) {
+      const fallbackDiv = document.createElement('div');
+      fallbackDiv.className = 'flex-1 flex items-center justify-center bg-gray-900';
+      fallbackDiv.innerHTML = `
         <div class="text-center px-6">
           <svg class="w-16 h-16 mx-auto text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -152,34 +167,21 @@ export async function showCameraScreen(container) {
              Seleccionar imagen
           </button>
         </div>
-      </div>
-    `;
+      `;
+      videoContainer.replaceWith(fallbackDiv);
+    }
 
-    document.getElementById('fallback-capture-btn').addEventListener('click', () => {
+    document.getElementById('fallback-capture-btn')?.addEventListener('click', () => {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
       input.capture = 'environment';
-      input.onchange = (e) => handleFallbackCapture(e.target.files[0]);
+      input.onchange = async (e) => {
+        await handleFallbackCapture(e.target.files[0]);
+      };
       input.click();
     });
     return;
-  }
-
-  const sessionLabel = document.getElementById('session-label');
-  const apiUrlLabel = document.getElementById('api-url-label');
-  apiUrlLabel.textContent = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:3001/api/v1`;
-
-  try {
-    const result = await createSession(`Sesión ${new Date().toLocaleString()}`, user.user_id);
-    currentSessionId = result.session_token;
-    sessionLabel.textContent = `Sesión: ${currentSessionId.slice(-8)}`;
-    setStatus(`Sesión lista (${currentSessionId.slice(-6)})`, false);
-  } catch (err) {
-    console.error('[SESSION] create failed:', err);
-    currentSessionId = crypto.randomUUID();
-    sessionLabel.textContent = `Sesión local: ${currentSessionId.slice(-8)}`;
-    setStatus(`Sesión local (${currentSessionId.slice(-6)})`, true);
   }
 
   video.addEventListener('loadeddata', () => {
