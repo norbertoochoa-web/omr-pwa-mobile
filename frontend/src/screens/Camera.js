@@ -123,41 +123,38 @@ export async function showCameraScreen(container) {
   canvas.height = 320;
 
   try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('getUserMedia no soportado');
+    }
     videoStream = await navigator.mediaDevices.getUserMedia({
-      video: { 
-        facingMode: { ideal: 'environment' },
-        width: { ideal: 1280 }, 
-        height: { ideal: 720 }
-      },
+      video: { facingMode: { ideal: 'environment' } },
       audio: false,
     });
     video.srcObject = videoStream;
     console.log('Camera stream started successfully');
   } catch (err) {
-    console.error('Camera error:', err.name, err.message);
-    showToast('Cámara no disponible: ' + err.message);
-    
-    const fallbackDiv = document.createElement('div');
-    fallbackDiv.className = 'flex-1 flex items-center justify-center bg-gray-900';
-    fallbackDiv.innerHTML = `
-      <div class="text-center px-6">
-        <svg class="w-16 h-16 mx-auto text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-        <p class="text-gray-400 mb-2">Cámara no disponible</p>
-        <p class="text-gray-500 text-sm mb-6">Error: ${err.message || 'Desconocido'}</p>
-        <button id="fallback-capture-btn" class="px-8 py-4 bg-blue-600 rounded-xl text-white font-semibold text-lg active:bg-blue-700 transition-colors">
-           Usar galería
-        </button>
+    console.error('[CAMERA] error:', err.name || '', err.message);
+    showToast('Usar galería en vez de cámara');
+
+    container.querySelector('video')?.remove();
+    container.querySelector('canvas')?.remove();
+    const overlay = container.querySelector('.absolute.inset-0.z-10');
+    if (overlay) overlay.innerHTML = `
+      <div class="absolute inset-0 flex items-center justify-center bg-gray-900">
+        <div class="text-center px-6">
+          <svg class="w-16 h-16 mx-auto text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <p class="text-gray-400 mb-2">Cámara no disponible</p>
+          <p class="text-gray-500 text-sm mb-6">${err.message || 'Selecciona una imagen de la galería'}</p>
+          <button id="fallback-capture-btn" class="px-8 py-4 bg-blue-600 rounded-xl text-white font-semibold text-lg active:bg-blue-700 transition-colors">
+             Seleccionar imagen
+          </button>
+        </div>
       </div>
     `;
-    
-    const videoContainer = document.querySelector('.flex-1.relative');
-    if (videoContainer) {
-      videoContainer.replaceWith(fallbackDiv);
-    }
-    
+
     document.getElementById('fallback-capture-btn').addEventListener('click', () => {
       const input = document.createElement('input');
       input.type = 'file';
@@ -350,17 +347,55 @@ export async function showCameraScreen(container) {
   });
 }
 
-function handleFallbackCapture(file) {
+async function handleFallbackCapture(file) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = async (e) => {
+    const imageData = e.target.result;
+    const sessionId = currentSessionId;
+    let queueId;
     try {
-      await addToQueue(e.target.result, currentSessionId);
-      captureCount++;
-      document.getElementById('capture-counter').textContent = `${captureCount} captura${captureCount !== 1 ? 's' : ''}`;
-      showToast('Imagen guardada');
-    } catch {
-      showToast('Error al guardar');
+      queueId = await addToQueue(imageData, sessionId);
+    } catch (err) {
+      console.error('[FALLBACK-QUEUE] error:', err);
+    }
+    captureCount++;
+    const counter = document.getElementById('capture-counter');
+    if (counter) counter.textContent = `${captureCount} captura${captureCount !== 1 ? 's' : ''}`;
+    setStatus('Enviando al servidor...');
+    showToast('Procesando...');
+
+    const baseUrl = import.meta.env.VITE_API_URL || `${location.protocol}//${location.hostname}:8000/api/v1`;
+    const token = sessionStorage.getItem('omr_jwt_token');
+    if (!token) { setStatus('Error: sesión expirada', true); return; }
+
+    const base64Data = imageData.split(',')[1];
+    const binaryStr = atob(base64Data);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+    const blob = new Blob([bytes], { type: file.type || 'image/jpeg' });
+
+    const fd = new FormData();
+    fd.append('session_id', sessionId);
+    fd.append('image', blob, `capture_${Date.now()}.jpg`);
+
+    try {
+      const resp = await fetch(`${baseUrl}/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const result = await resp.json();
+      if (!resp.ok) throw result;
+      if (queueId) await updateStatus(queueId, 'SUCCESS');
+      setStatus(`Captura ${captureCount} OK (score: ${result.score}/${result.total})`);
+      showToast(`✓ Score: ${result.score}/${result.total}`);
+    } catch (err) {
+      console.error('[FALLBACK-UPLOAD] error:', err);
+      if (queueId) await updateStatus(queueId, 'FAILED', String(err?.detail || err?.message || ''));
+      const detail = err?.detail || err?.message || err?.status || 'Error desconocido';
+      setStatus(`Error: ${String(detail).slice(0, 55)}`, true);
+      showToast('Error al procesar');
     }
   };
   reader.readAsDataURL(file);
