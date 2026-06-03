@@ -16,10 +16,10 @@ export async function showCameraScreen(container) {
   }
 
   try {
-    currentSessionId = `SESSION_${Date.now()}`;
-    await createSession(currentSessionId, user.user_id);
+    const result = await createSession(`Sesión ${new Date().toLocaleString()}`, user.user_id);
+    currentSessionId = result.session_token;
   } catch {
-    currentSessionId = `SESSION_${Date.now()}`;
+    currentSessionId = crypto.randomUUID();
   }
 
   container.innerHTML = `
@@ -218,11 +218,24 @@ export async function showCameraScreen(container) {
       captureCount++;
       captureCounter.textContent = `${captureCount} captura${captureCount !== 1 ? 's' : ''}`;
       downloadBtn.disabled = false;
-      showToast('Captura guardada');
+      showToast('Procesando...');
 
       if (navigator.vibrate) navigator.vibrate(30);
     } catch {
       showToast('Error al guardar captura');
+      captureBtn.disabled = false;
+      resetCalibration();
+      return;
+    }
+
+    await syncQueue();
+    updateQueueBadge();
+
+    const stats = await getQueueStats();
+    if (stats.failed > 0) {
+      showToast('Error al procesar imagen');
+    } else {
+      showToast(`Captura ${captureCount} procesada ✓`);
     }
 
     resetCalibration();

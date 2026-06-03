@@ -68,7 +68,7 @@ export async function checkSubscription(userId) {
 export async function createSession(sessionId, userId) {
   return request('/sessions', {
     method: 'POST',
-    body: JSON.stringify({ session_id: sessionId, user_id: userId }),
+    body: JSON.stringify({ name: sessionId }),
   });
 }
 
