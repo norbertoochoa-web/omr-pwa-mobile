@@ -121,6 +121,34 @@ export async function showCameraScreen(container) {
   const apiUrlLabel = document.getElementById('api-url-label');
   apiUrlLabel.textContent = import.meta.env.VITE_API_URL || `${location.protocol}//${location.hostname}:8000/api/v1`;
 
+  downloadBtn.addEventListener('click', async () => {
+    if (!currentSessionId) return;
+    try {
+      showToast('Generando archivo...');
+      const blob = await downloadSessionTxt(currentSessionId);
+      const fileName = `${currentSessionId.slice(0, 8)}.txt`;
+
+      if (navigator.canShare && navigator.canShare({ files: [new File([blob], fileName, { type: 'text/plain' })] })) {
+        await navigator.share({ files: [new File([blob], fileName, { type: 'text/plain' })] });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
+      }
+      showToast('Archivo descargado');
+    } catch (err) {
+      console.error('[DOWNLOAD] error:', err);
+      const detail = err?.detail || err?.message || 'Error desconocido';
+      setStatus(`Error descarga: ${detail.slice(0, 50)}`, true);
+      showToast('Error al descargar');
+    }
+  });
+
   try {
     const result = await createSession(`Sesión ${new Date().toLocaleString()}`, user.user_id);
     currentSessionId = result.session_token;
@@ -322,34 +350,6 @@ export async function showCameraScreen(container) {
     updateQueueBadge();
   });
 
-  downloadBtn.addEventListener('click', async () => {
-    if (!currentSessionId) return;
-    try {
-      showToast('Generando archivo...');
-      const blob = await downloadSessionTxt(currentSessionId);
-      const fileName = `${currentSessionId.slice(0, 8)}.txt`;
-
-      if (navigator.canShare && navigator.canShare({ files: [new File([blob], fileName, { type: 'text/plain' })] })) {
-        await navigator.share({ files: [new File([blob], fileName, { type: 'text/plain' })] });
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
-      }
-      showToast('Archivo descargado');
-    } catch (err) {
-      console.error('[DOWNLOAD] error:', err);
-      const detail = err?.detail || err?.message || 'Error desconocido';
-      setStatus(`Error descarga: ${detail.slice(0, 50)}`, true);
-      showToast('Error al descargar');
-    }
-  });
-
   queueBtn.addEventListener('click', () => {
     updateQueueBadge();
     const stats = getQueueStats();
@@ -377,7 +377,8 @@ async function handleFallbackCapture(file) {
     } catch (err) {
       console.error('[FALLBACK-QUEUE] error:', err);
     }
-    downloadBtn.disabled = false;
+    const dlBtn = document.getElementById('download-btn');
+    if (dlBtn) dlBtn.disabled = false;
     captureCount++;
     const counter = document.getElementById('capture-counter');
     if (counter) counter.textContent = `${captureCount} captura${captureCount !== 1 ? 's' : ''}`;
