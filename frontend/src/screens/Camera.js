@@ -230,44 +230,60 @@ export async function showCameraScreen(container) {
     tempCtx.drawImage(video, 0, 0);
 
     const imageData = tempCanvas.toDataURL('image/jpeg', 0.85);
+    const sessionId = currentSessionId;
 
+    let queueId;
     try {
-      await addToQueue(imageData, currentSessionId);
-      captureCount++;
-      captureCounter.textContent = `${captureCount} captura${captureCount !== 1 ? 's' : ''}`;
+      queueId = await addToQueue(imageData, sessionId);
       downloadBtn.disabled = false;
-      setStatus('Enviando al servidor...');
-      showToast('Procesando...');
-
       if (navigator.vibrate) navigator.vibrate(30);
     } catch (err) {
-      console.error('[QUEUE] addToQueue error:', err);
-      setStatus('Error al guardar captura', true);
-      showToast('Error al guardar captura');
-      captureBtn.disabled = false;
+      console.error('[QUEUE] error:', err);
+    }
+
+    captureCount++;
+    captureCounter.textContent = `${captureCount} captura${captureCount !== 1 ? 's' : ''}`;
+    showToast('Procesando...');
+
+    // --- UPLOAD DIRECTO ---
+    const baseUrl = import.meta.env.VITE_API_URL || `${location.protocol}//${location.hostname}:3001/api/v1`;
+    const token = sessionStorage.getItem('omr_jwt_token');
+    if (!token) {
+      setStatus('Error: sesión expirada', true);
       resetCalibration();
       return;
     }
+
+    const base64Data = imageData.split(',')[1];
+    const binaryStr = atob(base64Data);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'image/jpeg' });
+
+    const fd = new FormData();
+    fd.append('session_id', sessionId);
+    fd.append('image', blob, `capture_${Date.now()}.jpg`);
+
+    setStatus('Enviando al servidor...');
 
     try {
-      await syncQueue();
+      const resp = await fetch(`${baseUrl}/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const result = await resp.json();
+      if (!resp.ok) throw result;
+
+      if (queueId) await updateStatus(queueId, 'SUCCESS');
+      setStatus(`Captura ${captureCount} OK (score: ${result.score}/${result.total})`);
+      showToast(`✓ Score: ${result.score}/${result.total}`);
     } catch (err) {
-      console.error('[SYNC] syncQueue error:', err);
-      setStatus('Error de conexión al servidor', true);
-      showToast('Error al conectar con servidor');
-      resetCalibration();
-      return;
-    }
-
-    updateQueueBadge();
-
-    const stats = await getQueueStats();
-    if (stats.failed > 0) {
-      setStatus('Error al procesar imagen en servidor', true);
-      showToast('Error al procesar imagen');
-    } else {
-      setStatus(`Captura ${captureCount} procesada ✓`);
-      showToast(`Captura ${captureCount} procesada ✓`);
+      console.error('[UPLOAD] error:', err);
+      if (queueId) await updateStatus(queueId, 'FAILED', String(err?.detail || err?.message || ''));
+      const detail = err?.detail || err?.message || err?.status || 'Error desconocido';
+      setStatus(`Error: ${String(detail).slice(0, 55)}`, true);
+      showToast('Error al procesar');
     }
 
     resetCalibration();
@@ -422,12 +438,13 @@ async function updateQueueBadge() {
   }
 }
 
-function showToast(message) {
+function showToast(message, duration) {
   const toast = document.getElementById('toast');
   if (!toast) return;
   toast.textContent = message;
   toast.classList.remove('hidden');
-  setTimeout(() => toast.classList.add('hidden'), 2500);
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => toast.classList.add('hidden'), duration || 3500);
 }
 
 function setStatus(msg, isError) {
