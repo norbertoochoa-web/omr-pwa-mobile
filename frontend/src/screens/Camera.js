@@ -277,6 +277,11 @@ export async function showCameraScreen(container) {
       if (queueId) await updateStatus(queueId, 'SUCCESS');
       setStatus(`Captura ${captureCount} OK (score: ${result.score}/${result.total})`);
       showToast(`✓ Score: ${result.score}/${result.total}`);
+      // Mostrar resumen rápido
+      const correctas = Object.values(result.verdicts || {}).filter(v => v === 'Correct').length;
+      const incorrectas = (result.total || 0) - correctas;
+      setStatus(`✓ ${correctas}/${result.total} correctas (${incorrectas} incorrectas)`);
+      showToast(`Score: ${result.score}/${result.total}`);
     } catch (err) {
       console.error('[UPLOAD] error:', err);
       if (queueId) await updateStatus(queueId, 'FAILED', String(err?.detail || err?.message || ''));
@@ -308,23 +313,17 @@ export async function showCameraScreen(container) {
 
   downloadBtn.addEventListener('click', async () => {
     if (!currentSessionId) return;
-    
-    const stats = await getQueueStats();
-    if (stats.pending > 0 || stats.uploading > 0) {
-      showToast('Sincronizando capturas...');
-      await syncQueue();
-      updateQueueBadge();
-    }
-    
     try {
       showToast('Generando archivo...');
       const blob = await downloadSessionTxt(currentSessionId);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${currentSessionId}.txt`;
+      a.download = `${currentSessionId.slice(0, 8)}.txt`;
+      a.style.display = 'none';
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
       showToast('Archivo descargado');
     } catch (err) {
       console.error('[DOWNLOAD] error:', err);
