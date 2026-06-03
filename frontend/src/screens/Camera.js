@@ -149,7 +149,6 @@ export async function showCameraScreen(container) {
   } catch (err) {
     console.error('[CAMERA] error:', err.name || '', err.message);
     setStatus(`Sesión: ${currentSessionId.slice(-6)} | Cámara no disponible`, true);
-    showToast('Usar galería en vez de cámara');
 
     const videoContainer = container.querySelector('.flex-1.relative');
     if (videoContainer) {
@@ -157,27 +156,39 @@ export async function showCameraScreen(container) {
       fallbackDiv.className = 'flex-1 flex items-center justify-center bg-gray-900';
       fallbackDiv.innerHTML = `
         <div class="text-center px-6">
-          <svg class="w-16 h-16 mx-auto text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          <p class="text-gray-400 mb-2">Cámara no disponible</p>
-          <p class="text-gray-500 text-sm mb-6">${err.message || 'Selecciona una imagen de la galería'}</p>
-          <button id="fallback-capture-btn" class="px-8 py-4 bg-blue-600 rounded-xl text-white font-semibold text-lg active:bg-blue-700 transition-colors">
-             Seleccionar imagen
+          <p class="text-gray-300 mb-6">Elige cómo capturar la cartilla</p>
+          <button id="take-photo-btn" class="w-full px-6 py-4 bg-blue-600 rounded-xl text-white font-semibold text-lg active:bg-blue-700 transition-colors mb-3">
+            📷 Tomar foto
+          </button>
+          <button id="pick-gallery-btn" class="w-full px-6 py-4 bg-gray-700 rounded-xl text-white font-semibold text-lg active:bg-gray-600 transition-colors">
+            🖼️ Seleccionar de galería
           </button>
         </div>
       `;
       videoContainer.replaceWith(fallbackDiv);
     }
 
-    document.getElementById('fallback-capture-btn')?.addEventListener('click', () => {
+    document.getElementById('take-photo-btn')?.addEventListener('click', () => {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
       input.capture = 'environment';
       input.onchange = async (e) => {
-        await handleFallbackCapture(e.target.files[0]);
+        if (e.target.files[0]) await handleFallbackCapture(e.target.files[0]);
+      };
+      input.click();
+    });
+
+    document.getElementById('pick-gallery-btn')?.addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = async (e) => {
+        if (e.target.files[0]) await handleFallbackCapture(e.target.files[0]);
       };
       input.click();
     });
