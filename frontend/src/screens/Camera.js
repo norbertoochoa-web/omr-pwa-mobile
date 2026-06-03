@@ -18,8 +18,11 @@ export async function showCameraScreen(container) {
   try {
     const result = await createSession(`Sesión ${new Date().toLocaleString()}`, user.user_id);
     currentSessionId = result.session_token;
-  } catch {
+    setStatus(`Sesión lista (${currentSessionId.slice(-6)})`, false);
+  } catch (err) {
+    console.error('[SESSION] create failed:', err);
     currentSessionId = crypto.randomUUID();
+    setStatus(`Sesión local (${currentSessionId.slice(-6)})`, true);
   }
 
   container.innerHTML = `
@@ -97,6 +100,7 @@ export async function showCameraScreen(container) {
             <span id="queue-badge" class="hidden absolute -top-1 -right-1 min-w-[20px] h-5 bg-red-500 rounded-full text-[10px] font-bold flex items-center justify-center px-1">0</span>
           </button>
         </div>
+        <p id="process-status" class="text-center text-xs text-gray-400 mt-3 px-4"></p>
       </div>
 
       <!-- Toast -->
@@ -117,6 +121,8 @@ export async function showCameraScreen(container) {
   const downloadBtn = document.getElementById('download-btn');
   const queueBtn = document.getElementById('queue-btn');
   const queueBadge = document.getElementById('queue-badge');
+
+  setStatus('Conectando al servidor...');
 
   canvas.width = 320;
   canvas.height = 320;
@@ -204,6 +210,7 @@ export async function showCameraScreen(container) {
 
   captureBtn.addEventListener('click', async () => {
     captureBtn.disabled = true;
+    setStatus('Capturando imagen...');
 
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = video.videoWidth;
@@ -218,23 +225,37 @@ export async function showCameraScreen(container) {
       captureCount++;
       captureCounter.textContent = `${captureCount} captura${captureCount !== 1 ? 's' : ''}`;
       downloadBtn.disabled = false;
+      setStatus('Enviando al servidor...');
       showToast('Procesando...');
 
       if (navigator.vibrate) navigator.vibrate(30);
-    } catch {
+    } catch (err) {
+      console.error('[QUEUE] addToQueue error:', err);
+      setStatus('Error al guardar captura', true);
       showToast('Error al guardar captura');
       captureBtn.disabled = false;
       resetCalibration();
       return;
     }
 
-    await syncQueue();
+    try {
+      await syncQueue();
+    } catch (err) {
+      console.error('[SYNC] syncQueue error:', err);
+      setStatus('Error de conexión al servidor', true);
+      showToast('Error al conectar con servidor');
+      resetCalibration();
+      return;
+    }
+
     updateQueueBadge();
 
     const stats = await getQueueStats();
     if (stats.failed > 0) {
+      setStatus('Error al procesar imagen en servidor', true);
       showToast('Error al procesar imagen');
     } else {
+      setStatus(`Captura ${captureCount} procesada ✓`);
       showToast(`Captura ${captureCount} procesada ✓`);
     }
 
@@ -318,18 +339,20 @@ function handleFallbackCapture(file) {
 
 async function syncQueue() {
   const pending = await getPendingItems();
+  if (pending.length === 0) return;
 
   for (const item of pending) {
     if (item.retryCount >= 3) {
       await updateStatus(item.id, 'FAILED', 'Max retries exceeded');
+      setStatus('Reintentos agotados', true);
       continue;
     }
 
     await updateStatus(item.id, 'UPLOADING');
+    setStatus('Subiendo imagen...');
 
-    try {
-      const formData = new FormData();
-
+    const buildFormData = () => {
+      const fd = new FormData();
       const base64Data = item.imageData.split(',')[1];
       const byteCharacters = atob(base64Data);
       const byteNumbers = new Array(byteCharacters.length);
@@ -338,35 +361,33 @@ async function syncQueue() {
       }
       const byteArray = new Uint8Array(byteNumbers);
       const blob = new Blob([byteArray], { type: 'image/jpeg' });
+      fd.append('image', blob, `capture_${item.id}.jpg`);
+      fd.append('session_id', item.sessionId);
+      fd.append('timestamp', item.timestamp.toString());
+      return fd;
+    };
 
-      formData.append('image', blob, `capture_${item.id}.jpg`);
-      formData.append('session_id', item.sessionId);
-      formData.append('timestamp', item.timestamp.toString());
-
-      await uploadImage(formData);
+    try {
+      await uploadImage(buildFormData());
       await updateStatus(item.id, 'SUCCESS');
-    } catch {
+      setStatus('Imagen procesada ✓');
+    } catch (firstErr) {
+      console.error('[UPLOAD] first attempt failed:', firstErr);
+      setStatus('Reintentando...');
+
       await incrementRetryCount(item.id);
       const delay = Math.pow(2, item.retryCount) * 1000;
       await new Promise((resolve) => setTimeout(resolve, delay));
 
       try {
-        const formData = new FormData();
-        const base64Data = item.imageData.split(',')[1];
-        const byteCharacters = atob(base64Data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'image/jpeg' });
-        formData.append('image', blob, `capture_${item.id}.jpg`);
-        formData.append('session_id', item.sessionId);
-        formData.append('timestamp', item.timestamp.toString());
-        await uploadImage(formData);
+        await uploadImage(buildFormData());
         await updateStatus(item.id, 'SUCCESS');
-      } catch {
-        await updateStatus(item.id, 'FAILED', 'Upload failed after retry');
+        setStatus('Imagen procesada ✓');
+      } catch (secondErr) {
+        console.error('[UPLOAD] second attempt failed:', secondErr);
+        const detail = secondErr?.detail || secondErr?.message || 'Error desconocido';
+        await updateStatus(item.id, 'FAILED', `Upload failed: ${detail}`);
+        setStatus(`Error: ${detail.slice(0, 60)}`, true);
       }
     }
   }
@@ -394,6 +415,14 @@ function showToast(message) {
   toast.textContent = message;
   toast.classList.remove('hidden');
   setTimeout(() => toast.classList.add('hidden'), 2500);
+}
+
+function setStatus(msg, isError) {
+  const el = document.getElementById('process-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = `text-center text-xs mt-3 px-4 ${isError ? 'text-red-400' : 'text-gray-400'}`;
+  console.log('[STATUS]', msg);
 }
 
 export function stopCamera() {
