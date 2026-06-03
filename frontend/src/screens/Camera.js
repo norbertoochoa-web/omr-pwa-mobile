@@ -377,6 +377,7 @@ async function handleFallbackCapture(file) {
     } catch (err) {
       console.error('[FALLBACK-QUEUE] error:', err);
     }
+    downloadBtn.disabled = false;
     captureCount++;
     const counter = document.getElementById('capture-counter');
     if (counter) counter.textContent = `${captureCount} captura${captureCount !== 1 ? 's' : ''}`;
