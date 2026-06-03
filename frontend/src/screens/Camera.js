@@ -15,16 +15,6 @@ export async function showCameraScreen(container) {
     return;
   }
 
-  try {
-    const result = await createSession(`Sesión ${new Date().toLocaleString()}`, user.user_id);
-    currentSessionId = result.session_token;
-    setStatus(`Sesión lista (${currentSessionId.slice(-6)})`, false);
-  } catch (err) {
-    console.error('[SESSION] create failed:', err);
-    currentSessionId = crypto.randomUUID();
-    setStatus(`Sesión local (${currentSessionId.slice(-6)})`, true);
-  }
-
   container.innerHTML = `
     <div class="flex flex-col h-full w-full bg-black relative overflow-hidden">
       <!-- Header -->
@@ -35,7 +25,7 @@ export async function showCameraScreen(container) {
           </svg>
         </button>
         <div class="text-center">
-          <p class="text-sm font-semibold text-white">Sesión: ${currentSessionId.slice(-8)}</p>
+          <p class="text-sm font-semibold text-white" id="session-label">Sesión: ...</p>
           <p id="capture-counter" class="text-xs text-gray-300 mt-1">0 capturas</p>
         </div>
         <button id="sync-btn" class="p-3 rounded-xl bg-white/20 backdrop-blur-md active:bg-white/30 transition-colors">
@@ -43,6 +33,11 @@ export async function showCameraScreen(container) {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m0 0l4 4" />
           </svg>
         </button>
+      </div>
+
+      <!-- Mini barra de depuración -->
+      <div class="absolute top-14 left-0 right-0 z-20 flex justify-center">
+        <span id="api-url-label" class="text-[10px] text-gray-500 bg-black/60 px-2 py-0.5 rounded-full"></span>
       </div>
 
       <!-- Camera View -->
@@ -174,6 +169,22 @@ export async function showCameraScreen(container) {
     return;
   }
 
+  const sessionLabel = document.getElementById('session-label');
+  const apiUrlLabel = document.getElementById('api-url-label');
+  apiUrlLabel.textContent = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:3001/api/v1`;
+
+  try {
+    const result = await createSession(`Sesión ${new Date().toLocaleString()}`, user.user_id);
+    currentSessionId = result.session_token;
+    sessionLabel.textContent = `Sesión: ${currentSessionId.slice(-8)}`;
+    setStatus(`Sesión lista (${currentSessionId.slice(-6)})`, false);
+  } catch (err) {
+    console.error('[SESSION] create failed:', err);
+    currentSessionId = crypto.randomUUID();
+    sessionLabel.textContent = `Sesión local: ${currentSessionId.slice(-8)}`;
+    setStatus(`Sesión local (${currentSessionId.slice(-6)})`, true);
+  }
+
   video.addEventListener('loadeddata', () => {
     console.log('Video loaded, starting calibration');
     startCalibration(video, canvas, ctx, (calibrated) => {
@@ -301,7 +312,9 @@ export async function showCameraScreen(container) {
       URL.revokeObjectURL(url);
       showToast('Archivo descargado');
     } catch (err) {
-      console.error('Download error:', err);
+      console.error('[DOWNLOAD] error:', err);
+      const detail = err?.detail || err?.message || 'Error desconocido';
+      setStatus(`Error descarga: ${detail.slice(0, 50)}`, true);
       showToast('Error al descargar');
     }
   });
