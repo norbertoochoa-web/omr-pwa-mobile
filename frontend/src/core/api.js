@@ -79,6 +79,13 @@ export async function uploadImage(formData) {
   });
 }
 
+export async function exchangeSSOToken(ssoToken) {
+  return request('/auth/sso', {
+    method: 'POST',
+    body: JSON.stringify({ token: ssoToken }),
+  });
+}
+
 export async function downloadSessionTxt(sessionId) {
   const url = `${BASE_URL}/sessions/${sessionId}/download`;
   const token = sessionStorage.getItem('omr_jwt_token');

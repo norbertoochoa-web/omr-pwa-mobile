@@ -1,8 +1,10 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 
 export default defineConfig({
   plugins: [
+    basicSsl(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'icons/*.png'],
@@ -42,14 +44,15 @@ export default defineConfig({
   ],
 
   server: {
-port: 5173,
-  strictPort: true,
-  host: true,
-  allowedHosts: true,
-  hmr: {
-    protocol: 'ws',        // importante para ngrok
-    host: '0.0.0.0',
-  }
+    port: 5173,
+    strictPort: true,
+    host: true,
+    allowedHosts: true,
+    https: true,
+    hmr: {
+      protocol: 'wss',
+      host: '0.0.0.0',
+    },
   },
 
   build: {

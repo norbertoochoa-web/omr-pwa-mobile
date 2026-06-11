@@ -55,32 +55,43 @@ export function detectCorners(pixels, size) {
     gray[i / 4] = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
   }
 
-  const cornerSize = Math.floor(size * 0.15);
-  const corners = [
-    { x: 0, y: 0 },
-    { x: size - cornerSize, y: 0 },
-    { x: 0, y: size - cornerSize },
-    { x: size - cornerSize, y: size - cornerSize }
-  ];
+  const threshold = 60;
+  let minX = size, maxX = 0, minY = size, maxY = 0;
+  let darkCount = 0;
 
-  let cornerScore = 0;
-  for (const corner of corners) {
-    let darkPixels = 0;
-    let totalPixels = 0;
-    for (let y = corner.y; y < corner.y + cornerSize; y += 2) {
-      for (let x = corner.x; x < corner.x + cornerSize; x += 2) {
-        if (gray[y * size + x] < 60) {
-          darkPixels++;
-        }
-        totalPixels++;
+  for (let y = 0; y < size; y += 2) {
+    for (let x = 0; x < size; x += 2) {
+      if (gray[y * size + x] < threshold) {
+        darkCount++;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
       }
-    }
-    if (darkPixels / totalPixels > 0.3) {
-      cornerScore++;
     }
   }
 
-  return cornerScore >= 3;
+  const totalPixels = (size / 2) * (size / 2);
+  const darkRatio = darkCount / totalPixels;
+  if (darkRatio < 0.15) return false;
+
+  const bboxW = maxX - minX;
+  const bboxH = maxY - minY;
+  const bboxArea = bboxW * bboxH;
+  const roiArea = size * size;
+  const coverage = bboxArea / roiArea;
+
+  if (coverage < 0.70) return false;
+
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+  const roiCenter = size / 2;
+  const maxOffset = size * 0.10;
+
+  if (Math.abs(centerX - roiCenter) > maxOffset) return false;
+  if (Math.abs(centerY - roiCenter) > maxOffset) return false;
+
+  return true;
 }
 
 export function checkCalibration(videoElement, canvas, ctx) {
@@ -115,7 +126,7 @@ export function checkCalibration(videoElement, canvas, ctx) {
   const isStable = avgDiff < STABILITY_THRESHOLD;
   const hasCorners = detectCorners(pixels, drawWidth);
 
-  if (isSharp && isStable) {
+  if (isSharp && isStable && hasCorners) {
     stableFrameCount++;
   } else {
     stableFrameCount = 0;
@@ -126,7 +137,7 @@ export function checkCalibration(videoElement, canvas, ctx) {
   }
   prevFrames.push(new Uint8Array(pixels));
 
-  return isSharp && isStable && stableFrameCount >= REQUIRED_STABLE_FRAMES;
+  return isSharp && isStable && hasCorners && stableFrameCount >= REQUIRED_STABLE_FRAMES;
 }
 
 export function startCalibration(videoElement, canvas, ctx, onCalibrationChange) {
