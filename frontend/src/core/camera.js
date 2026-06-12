@@ -56,42 +56,41 @@ export function detectCorners(pixels, size) {
   }
 
   const threshold = 60;
-  let minX = size, maxX = 0, minY = size, maxY = 0;
-  let darkCount = 0;
+  const GRID = 6;
+  const cellSize = size / GRID;
+  const darkCellRatio = 0.15;
 
-  for (let y = 0; y < size; y += 2) {
-    for (let x = 0; x < size; x += 2) {
-      if (gray[y * size + x] < threshold) {
-        darkCount++;
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
+  const cells = [];
+  for (let gy = 0; gy < GRID; gy++) {
+    for (let gx = 0; gx < GRID; gx++) {
+      let darkCount = 0;
+      let total = 0;
+      for (let y = gy * cellSize; y < (gy + 1) * cellSize; y += 2) {
+        for (let x = gx * cellSize; x < (gx + 1) * cellSize; x += 2) {
+          total++;
+          if (gray[y * size + x] < threshold) darkCount++;
+        }
       }
+      cells.push({ gx, gy, ratio: darkCount / total });
     }
   }
 
-  const totalPixels = (size / 2) * (size / 2);
-  const darkRatio = darkCount / totalPixels;
-  if (darkRatio < 0.005) return { detected: false, reason: 'sin_detectar' };
+  const cornerRegions = [
+    [0,1,2, 6,7,8, 12,13,14],
+    [3,4,5, 9,10,11, 15,16,17],
+    [18,19,20, 24,25,26, 30,31,32],
+    [21,22,23, 27,28,29, 33,34,35],
+  ];
 
-  const bboxW = maxX - minX;
-  const bboxH = maxY - minY;
-  const bboxArea = bboxW * bboxH;
-  const roiArea = size * size;
-  const coverage = bboxArea / roiArea;
+  let cornersDetected = 0;
+  for (const region of cornerRegions) {
+    const maxRatio = Math.max(...region.map(i => cells[i].ratio));
+    if (maxRatio > darkCellRatio) cornersDetected++;
+  }
 
-  if (coverage < 0.20) return { detected: false, reason: 'sin_detectar' };
-
-  const centerX = (minX + maxX) / 2;
-  const centerY = (minY + maxY) / 2;
-  const roiCenter = size / 2;
-  const maxOffset = size * 0.15;
-
-  if (Math.abs(centerX - roiCenter) > maxOffset) return { detected: false, reason: 'sin_detectar' };
-  if (Math.abs(centerY - roiCenter) > maxOffset) return { detected: false, reason: 'descentrado' };
-
-  return { detected: true, reason: 'alineado' };
+  if (cornersDetected >= 3) return { detected: true, reason: 'alineado' };
+  if (cornersDetected >= 2) return { detected: false, reason: 'descentrado' };
+  return { detected: false, reason: 'sin_detectar' };
 }
 
 export function checkCalibration(videoElement, canvas, ctx, nativeRect) {
