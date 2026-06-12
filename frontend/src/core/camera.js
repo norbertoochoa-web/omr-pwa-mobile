@@ -56,9 +56,9 @@ export function detectCorners(pixels, size) {
   }
 
   const threshold = 60;
-  const regionRatio = 0.22;
+  const regionRatio = 0.30;
   const regionSize = Math.floor(size * regionRatio);
-  const margin = Math.floor(size * 0.03);
+  const margin = Math.floor(size * 0.04);
 
   const regions = [
     { x: margin, y: margin },
@@ -83,16 +83,17 @@ export function detectCorners(pixels, size) {
         }
       }
     }
-    if (darkCount / sampleCount > 0.15) cornersDetected++;
+    if (darkCount / sampleCount > 0.10) cornersDetected++;
   }
 
-  return cornersDetected >= 3
+  return cornersDetected >= 2
     ? { detected: true, reason: 'alineado' }
     : { detected: false, reason: cornersDetected > 0 ? 'descentrado' : 'sin_detectar' };
 }
 
 export function checkCalibration(videoElement, canvas, ctx, nativeRect) {
   if (!videoElement || videoElement.readyState < 2) return { calibrated: false, guidance: 'alinear' };
+  if (!nativeRect || nativeRect.width < 10 || nativeRect.height < 10) return { calibrated: false, guidance: 'alinear' };
 
   canvas.width = PROCESS_SIZE;
   canvas.height = PROCESS_SIZE;
