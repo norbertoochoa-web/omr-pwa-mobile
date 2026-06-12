@@ -49,7 +49,7 @@ export async function showCameraScreen(container) {
         <div class="absolute inset-0 z-10 pointer-events-none">
           <div class="absolute inset-0 bg-black/40"></div>
           <div id="capture-area" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" style="width: min(78vw, 323px); height: min(140vw, 578px);">
-            <div class="absolute inset-0 bg-transparent border-4 border-overlay-red rounded-xl overlay-transition"></div>
+            <div class="absolute inset-0 bg-transparent border-4 border-white rounded-xl"></div>
             
             <!-- Corner markers for alignment -->
             <div class="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white -mt-1 -ml-1"></div>
@@ -70,6 +70,11 @@ export async function showCameraScreen(container) {
               <p class="text-xs text-gray-300 bg-black/50 px-3 py-1.5 rounded-full inline-block">
                 Alinea las marcas + en las esquinas
               </p>
+            </div>
+            <div id="guidance-text" class="absolute -bottom-28 left-0 right-0 text-center">
+              <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-white/90 text-gray-800 shadow-lg">
+                Alinea la cartilla en el recuadro
+              </span>
             </div>
           </div>
         </div>
@@ -103,12 +108,15 @@ export async function showCameraScreen(container) {
     </div>
   `;
 
+  let lastAutoCaptureTime = 0;
+  let isProcessing = false;
+
   const video = document.getElementById('camera-video');
   const canvas = document.getElementById('calibration-canvas');
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const captureArea = document.getElementById('capture-area');
-  const overlayBorder = captureArea.querySelector('.border-4');
   const overlayStatus = document.getElementById('overlay-status');
+  const guidanceText = document.getElementById('guidance-text');
   const captureBtn = document.getElementById('capture-btn');
   const captureCounter = document.getElementById('capture-counter');
   const logoutBtn = document.getElementById('logout-btn');
@@ -225,21 +233,22 @@ export async function showCameraScreen(container) {
 
   video.addEventListener('loadeddata', () => {
     console.log('Video loaded, starting calibration');
-    startCalibration(video, canvas, ctx, (calibrated) => {
-      if (calibrated) {
-        overlayBorder.classList.remove('border-overlay-red');
-        overlayBorder.classList.add('border-overlay-green');
+    startCalibration(video, canvas, ctx, (result) => {
+      if (result.calibrated) {
         overlayStatus.innerHTML = `
           <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-green-500/90 text-white shadow-lg">
             <span class="w-2.5 h-2.5 bg-white rounded-full mr-2"></span>
-            ¡Listo! Toca para capturar
+            ¡Listo!
           </span>
         `;
         captureBtn.disabled = false;
         captureBtn.classList.add('animate-pulse');
+        const now = Date.now();
+        if (now - lastAutoCaptureTime > 3000 && !isProcessing) {
+          lastAutoCaptureTime = now;
+          captureBtn.click();
+        }
       } else {
-        overlayBorder.classList.remove('border-overlay-green');
-        overlayBorder.classList.add('border-overlay-red');
         overlayStatus.innerHTML = `
           <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-red-500/90 text-white shadow-lg">
             <span class="w-2.5 h-2.5 bg-white rounded-full mr-2 animate-pulse"></span>
@@ -249,6 +258,9 @@ export async function showCameraScreen(container) {
         captureBtn.disabled = true;
         captureBtn.classList.remove('animate-pulse');
       }
+    }, (result) => {
+      const map = { alinear: 'Alinea la cartilla', subir: 'Sube el celular', bajar: 'Baja el celular', quieto: 'Mantén el celular quieto', listo: '¡Listo!' };
+      guidanceText.innerHTML = `<span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-white/90 text-gray-800 shadow-lg">${map[result.guidance] || 'Alinea la cartilla'}</span>`;
     });
   });
 
@@ -258,6 +270,8 @@ export async function showCameraScreen(container) {
   });
 
   captureBtn.addEventListener('click', async () => {
+    if (isProcessing) return;
+    isProcessing = true;
     captureBtn.disabled = true;
     setStatus('Capturando imagen...');
 
@@ -330,6 +344,7 @@ export async function showCameraScreen(container) {
     }
 
     resetCalibration();
+    isProcessing = false;
   });
 
   logoutBtn.addEventListener('click', async () => {

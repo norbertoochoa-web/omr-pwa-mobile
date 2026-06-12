@@ -73,7 +73,7 @@ export function detectCorners(pixels, size) {
 
   const totalPixels = (size / 2) * (size / 2);
   const darkRatio = darkCount / totalPixels;
-  if (darkRatio < 0.15) return false;
+  if (darkRatio < 0.15) return { detected: false, reason: 'sin_detectar' };
 
   const bboxW = maxX - minX;
   const bboxH = maxY - minY;
@@ -81,17 +81,19 @@ export function detectCorners(pixels, size) {
   const roiArea = size * size;
   const coverage = bboxArea / roiArea;
 
-  if (coverage < 0.70) return false;
+  if (coverage < 0.70) return { detected: false, reason: 'sin_detectar' };
 
   const centerX = (minX + maxX) / 2;
   const centerY = (minY + maxY) / 2;
   const roiCenter = size / 2;
   const maxOffset = size * 0.10;
+  const offsetX = centerX - roiCenter;
+  const offsetY = centerY - roiCenter;
 
-  if (Math.abs(centerX - roiCenter) > maxOffset) return false;
-  if (Math.abs(centerY - roiCenter) > maxOffset) return false;
+  if (Math.abs(offsetX) > maxOffset) return { detected: false, reason: 'sin_detectar' };
+  if (Math.abs(offsetY) > maxOffset) return { detected: false, reason: 'descentrado', offsetY };
 
-  return true;
+  return { detected: true, reason: 'alineado' };
 }
 
 export function checkCalibration(videoElement, canvas, ctx) {
@@ -124,9 +126,9 @@ export function checkCalibration(videoElement, canvas, ctx) {
 
   const isSharp = variance > SHARPNESS_THRESHOLD;
   const isStable = avgDiff < STABILITY_THRESHOLD;
-  const hasCorners = detectCorners(pixels, drawWidth);
+  const cornerResult = detectCorners(pixels, drawWidth);
 
-  if (isSharp && isStable && hasCorners) {
+  if (isSharp && isStable && cornerResult.detected) {
     stableFrameCount++;
   } else {
     stableFrameCount = 0;
@@ -137,25 +139,38 @@ export function checkCalibration(videoElement, canvas, ctx) {
   }
   prevFrames.push(new Uint8Array(pixels));
 
-  return isSharp && isStable && hasCorners && stableFrameCount >= REQUIRED_STABLE_FRAMES;
+  const calibrated = isSharp && isStable && cornerResult.detected && stableFrameCount >= REQUIRED_STABLE_FRAMES;
+
+  let guidance = 'alinear';
+  if (calibrated) {
+    guidance = 'listo';
+  } else if (cornerResult.detected && (!isSharp || !isStable)) {
+    guidance = 'quieto';
+  } else if (cornerResult.reason === 'descentrado') {
+    guidance = cornerResult.offsetY > 0 ? 'subir' : 'bajar';
+  }
+
+  return { calibrated, guidance };
 }
 
-export function startCalibration(videoElement, canvas, ctx, onCalibrationChange) {
+export function startCalibration(videoElement, canvas, ctx, onCalibrationChange, onFrame) {
   stopCalibration();
   stableFrameCount = 0;
   prevFrames = [];
 
   const check = () => {
-    const calibrated = checkCalibration(videoElement, canvas, ctx);
+    const result = checkCalibration(videoElement, canvas, ctx);
 
-    if (calibrated && !isCalibrated) {
+    if (onFrame) onFrame(result);
+
+    if (result.calibrated && !isCalibrated) {
       isCalibrated = true;
       if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
-      onCalibrationChange(true);
-    } else if (!calibrated && isCalibrated) {
+      onCalibrationChange(result);
+    } else if (!result.calibrated && isCalibrated) {
       isCalibrated = false;
       stableFrameCount = 0;
-      onCalibrationChange(false);
+      onCalibrationChange(result);
     }
   };
 
