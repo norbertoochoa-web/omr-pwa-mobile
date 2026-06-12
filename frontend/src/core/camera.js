@@ -55,7 +55,6 @@ export function detectCorners(pixels, size) {
     gray[i / 4] = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
   }
 
-  const threshold = 60;
   const GRID = 12;
   const cellSize = size / GRID;
   const darkCellRatio = 0.10;
@@ -63,12 +62,27 @@ export function detectCorners(pixels, size) {
   const cells = [];
   for (let gy = 0; gy < GRID; gy++) {
     for (let gx = 0; gx < GRID; gx++) {
-      let darkCount = 0;
+      let sum = 0;
       let total = 0;
-      for (let y = gy * cellSize; y < (gy + 1) * cellSize; y += 2) {
-        for (let x = gx * cellSize; x < (gx + 1) * cellSize; x += 2) {
+      const yStart = gy * cellSize;
+      const yEnd = (gy + 1) * cellSize;
+      const xStart = gx * cellSize;
+      const xEnd = (gx + 1) * cellSize;
+      for (let y = yStart; y < yEnd; y += 2) {
+        for (let x = xStart; x < xEnd; x += 2) {
+          sum += gray[y * size + x];
           total++;
-          if (gray[y * size + x] < threshold) darkCount++;
+        }
+      }
+      const mean = total > 0 ? sum / total : 128;
+      const adaptiveThreshold = mean * 0.5;
+
+      let darkCount = 0;
+      total = 0;
+      for (let y = yStart; y < yEnd; y += 2) {
+        for (let x = xStart; x < xEnd; x += 2) {
+          total++;
+          if (gray[y * size + x] < adaptiveThreshold) darkCount++;
         }
       }
       cells.push({ gx, gy, ratio: darkCount / total });

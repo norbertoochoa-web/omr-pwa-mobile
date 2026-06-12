@@ -48,7 +48,7 @@ export async function showCameraScreen(container) {
         <!-- Dark overlay outside capture area -->
         <div class="absolute inset-0 z-10 pointer-events-none">
           <div class="absolute inset-0 bg-black/40"></div>
-          <div id="capture-area" class="absolute top-[44%] left-1/2 -translate-x-1/2 -translate-y-1/2" style="width: min(92vw, 380px); height: min(122vw, 504px);">
+          <div id="capture-area" class="absolute top-[44%] left-1/2 -translate-x-1/2 -translate-y-1/2" style="width: min(106vw, 437px); height: min(140vw, 580px);">
             <div class="absolute inset-0 bg-transparent border-4 border-white rounded-xl"></div>
             
             <!-- Corner markers for alignment -->
@@ -65,21 +65,8 @@ export async function showCameraScreen(container) {
               </span>
             </div>
             
-            <!-- Instructions -->
-            <div class="absolute -bottom-16 left-0 right-0 text-center">
-              <p class="text-xs text-gray-300 bg-black/50 px-3 py-1.5 rounded-full inline-block">
-                Alinea las marcas + en las esquinas
-              </p>
-            </div>
           </div>
         </div>
-      </div>
-
-      <!-- Guidance text above controls -->
-      <div id="guidance-text" class="absolute z-30 bottom-36 left-0 right-0 text-center pointer-events-none">
-        <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-white/90 text-gray-800 shadow-lg">
-          Alinea la cartilla en el recuadro
-        </span>
       </div>
 
       <!-- Controls -->
@@ -115,7 +102,6 @@ export async function showCameraScreen(container) {
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const captureArea = document.getElementById('capture-area');
   const overlayStatus = document.getElementById('overlay-status');
-  const guidanceText = document.getElementById('guidance-text');
   const captureBtn = document.getElementById('capture-btn');
   const captureCounter = document.getElementById('capture-counter');
   const logoutBtn = document.getElementById('logout-btn');
@@ -270,7 +256,6 @@ export async function showCameraScreen(container) {
         listo: { text: '¡Listo!', cls: 'bg-green-500/90', pulse: false },
       };
       const state = map[result.guidance] || map.alinear;
-      guidanceText.innerHTML = `<span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-white/90 text-gray-800 shadow-lg">${state.text}</span>`;
       overlayStatus.innerHTML = `<span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold ${state.cls} text-white shadow-lg">${state.pulse ? '<span class="w-2.5 h-2.5 bg-white rounded-full mr-2 animate-pulse"></span>' : '<span class="w-2.5 h-2.5 bg-white rounded-full mr-2"></span>'}${state.text}</span>`;
     }, nativeRect);
   });
