@@ -56,9 +56,9 @@ export function detectCorners(pixels, size) {
   }
 
   const threshold = 60;
-  const GRID = 6;
+  const GRID = 12;
   const cellSize = size / GRID;
-  const darkCellRatio = 0.15;
+  const darkCellRatio = 0.10;
 
   const cells = [];
   for (let gy = 0; gy < GRID; gy++) {
@@ -76,10 +76,10 @@ export function detectCorners(pixels, size) {
   }
 
   const cornerRegions = [
-    [0,1,2, 6,7,8, 12,13,14],
-    [3,4,5, 9,10,11, 15,16,17],
-    [18,19,20, 24,25,26, 30,31,32],
-    [21,22,23, 27,28,29, 33,34,35],
+    [0,1,2, 12,13,14, 24,25,26],
+    [9,10,11, 21,22,23, 33,34,35],
+    [108,109,110, 120,121,122, 132,133,134],
+    [117,118,119, 129,130,131, 141,142,143],
   ];
 
   let cornersDetected = 0;
