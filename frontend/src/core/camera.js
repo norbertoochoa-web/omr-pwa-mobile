@@ -1,4 +1,4 @@
-const ROI_SIZE = parseInt(import.meta.env.VITE_ROI_SIZE) || 480;
+const PROCESS_SIZE = 480;
 const SHARPNESS_THRESHOLD = parseInt(import.meta.env.VITE_LAPLACIAN_THRESHOLD) || 120;
 const STABILITY_THRESHOLD = parseFloat(import.meta.env.VITE_STABILITY_THRESHOLD) || 0.12;
 const FRAME_HISTORY = 3;
@@ -91,25 +91,20 @@ export function detectCorners(pixels, size) {
     : { detected: false, reason: cornersDetected > 0 ? 'descentrado' : 'sin_detectar' };
 }
 
-export function checkCalibration(videoElement, canvas, ctx) {
+export function checkCalibration(videoElement, canvas, ctx, nativeRect) {
   if (!videoElement || videoElement.readyState < 2) return { calibrated: false, guidance: 'alinear' };
 
-  const videoWidth = videoElement.videoWidth;
-  const videoHeight = videoElement.videoHeight;
+  canvas.width = PROCESS_SIZE;
+  canvas.height = PROCESS_SIZE;
+  ctx.drawImage(videoElement,
+    nativeRect.x, nativeRect.y, nativeRect.width, nativeRect.height,
+    0, 0, PROCESS_SIZE, PROCESS_SIZE
+  );
   
-  const drawWidth = Math.min(videoWidth, ROI_SIZE);
-  const drawHeight = Math.min(videoHeight, ROI_SIZE);
-  const offsetX = Math.floor((videoWidth - drawWidth) / 2);
-  const offsetY = Math.floor((videoHeight - drawHeight) / 2);
-
-  canvas.width = drawWidth;
-  canvas.height = drawHeight;
-  ctx.drawImage(videoElement, offsetX, offsetY, drawWidth, drawHeight, 0, 0, drawWidth, drawHeight);
-  
-  const imageData = ctx.getImageData(0, 0, drawWidth, drawHeight);
+  const imageData = ctx.getImageData(0, 0, PROCESS_SIZE, PROCESS_SIZE);
   const pixels = imageData.data;
 
-  const variance = computeLaplacianVariance(pixels, drawWidth);
+  const variance = computeLaplacianVariance(pixels, PROCESS_SIZE);
   
   let avgDiff = 0;
   if (prevFrames.length > 0) {
@@ -121,7 +116,7 @@ export function checkCalibration(videoElement, canvas, ctx) {
 
   const isSharp = variance > SHARPNESS_THRESHOLD;
   const isStable = avgDiff < STABILITY_THRESHOLD;
-  const cornerResult = detectCorners(pixels, drawWidth);
+  const cornerResult = detectCorners(pixels, PROCESS_SIZE);
 
   if (isSharp && isStable && cornerResult.detected) {
     stableFrameCount++;
@@ -146,13 +141,13 @@ export function checkCalibration(videoElement, canvas, ctx) {
   return { calibrated, guidance };
 }
 
-export function startCalibration(videoElement, canvas, ctx, onCalibrationChange, onFrame) {
+export function startCalibration(videoElement, canvas, ctx, onCalibrationChange, onFrame, nativeRect) {
   stopCalibration();
   stableFrameCount = 0;
   prevFrames = [];
 
   const check = () => {
-    const result = checkCalibration(videoElement, canvas, ctx);
+    const result = checkCalibration(videoElement, canvas, ctx, nativeRect);
 
     if (onFrame) onFrame(result);
 

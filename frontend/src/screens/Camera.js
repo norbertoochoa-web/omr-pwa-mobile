@@ -71,13 +71,15 @@ export async function showCameraScreen(container) {
                 Alinea las marcas + en las esquinas
               </p>
             </div>
-            <div id="guidance-text" class="absolute -bottom-28 left-0 right-0 text-center">
-              <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-white/90 text-gray-800 shadow-lg">
-                Alinea la cartilla en el recuadro
-              </span>
-            </div>
           </div>
         </div>
+      </div>
+
+      <!-- Guidance text above controls -->
+      <div id="guidance-text" class="absolute z-30 bottom-28 left-0 right-0 text-center pointer-events-none">
+        <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-white/90 text-gray-800 shadow-lg">
+          Alinea la cartilla en el recuadro
+        </span>
       </div>
 
       <!-- Controls -->
@@ -228,8 +230,31 @@ export async function showCameraScreen(container) {
     return;
   }
 
+  function getCalibrationRect() {
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    const videoRect = video.getBoundingClientRect();
+    const capRect = captureArea.getBoundingClientRect();
+    const cw = videoRect.width;
+    const ch = videoRect.height;
+    const scale = Math.max(cw / vw, ch / vh);
+    const dw = vw * scale;
+    const dh = vh * scale;
+    const offsetX = (dw - cw) / 2;
+    const offsetY = (dh - ch) / 2;
+    const relLeft = capRect.left - videoRect.left;
+    const relTop = capRect.top - videoRect.top;
+    return {
+      x: Math.max(0, Math.round((relLeft + offsetX) / scale)),
+      y: Math.max(0, Math.round((relTop + offsetY) / scale)),
+      width: Math.round(capRect.width / scale),
+      height: Math.round(capRect.height / scale),
+    };
+  }
+
   video.addEventListener('loadeddata', () => {
     console.log('Video loaded, starting calibration');
+    const nativeRect = getCalibrationRect();
     startCalibration(video, canvas, ctx, (result) => {
       if (result.calibrated) {
         overlayStatus.innerHTML = `
@@ -253,7 +278,7 @@ export async function showCameraScreen(container) {
     }, (result) => {
       const map = { alinear: 'Alinea la cartilla en el recuadro', quieto: 'Mantén el celular quieto', listo: '¡Listo!' };
       guidanceText.innerHTML = `<span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-white/90 text-gray-800 shadow-lg">${map[result.guidance] || 'Alinea la cartilla'}</span>`;
-    });
+    }, nativeRect);
   });
 
   video.addEventListener('error', (e) => {
