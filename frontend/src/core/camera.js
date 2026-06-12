@@ -55,51 +55,62 @@ export function detectCorners(pixels, size) {
     gray[i / 4] = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
   }
 
-  const GRID = 12;
-  const cellSize = size / GRID;
-  const darkCellRatio = 0.10;
+  const brightThreshold = 180;
+  let minX = size, maxX = 0, minY = size, maxY = 0;
+  let brightCount = 0;
 
-  const cells = [];
-  for (let gy = 0; gy < GRID; gy++) {
-    for (let gx = 0; gx < GRID; gx++) {
-      let sum = 0;
-      let total = 0;
-      const yStart = gy * cellSize;
-      const yEnd = (gy + 1) * cellSize;
-      const xStart = gx * cellSize;
-      const xEnd = (gx + 1) * cellSize;
-      for (let y = yStart; y < yEnd; y += 2) {
-        for (let x = xStart; x < xEnd; x += 2) {
-          sum += gray[y * size + x];
-          total++;
-        }
+  for (let y = 0; y < size; y += 2) {
+    for (let x = 0; x < size; x += 2) {
+      if (gray[y * size + x] > brightThreshold) {
+        brightCount++;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
       }
-      const mean = total > 0 ? sum / total : 128;
-      const adaptiveThreshold = mean * 0.5;
-
-      let darkCount = 0;
-      total = 0;
-      for (let y = yStart; y < yEnd; y += 2) {
-        for (let x = xStart; x < xEnd; x += 2) {
-          total++;
-          if (gray[y * size + x] < adaptiveThreshold) darkCount++;
-        }
-      }
-      cells.push({ gx, gy, ratio: darkCount / total });
     }
   }
 
-  const cornerRegions = [
-    [0,1,2, 12,13,14, 24,25,26],
-    [9,10,11, 21,22,23, 33,34,35],
-    [108,109,110, 120,121,122, 132,133,134],
-    [117,118,119, 129,130,131, 141,142,143],
+  const totalSamples = (size / 2) * (size / 2);
+  const brightRatio = brightCount / totalSamples;
+  if (brightRatio < 0.15 || brightCount < 50) {
+    return { detected: false, reason: 'sin_detectar' };
+  }
+
+  const bboxW = maxX - minX;
+  const bboxH = maxY - minY;
+  const bboxArea = bboxW * bboxH;
+  const roiArea = size * size;
+  const coverage = bboxArea / roiArea;
+  if (coverage < 0.20 || coverage > 0.95) {
+    return { detected: false, reason: 'sin_detectar' };
+  }
+
+  const cornerSize = Math.min(bboxW, bboxH) * 0.25;
+  const corners = [
+    { x: minX, y: minY },
+    { x: maxX - cornerSize, y: minY },
+    { x: minX, y: maxY - cornerSize },
+    { x: maxX - cornerSize, y: maxY - cornerSize },
   ];
 
+  const darkThreshold = 80;
   let cornersDetected = 0;
-  for (const region of cornerRegions) {
-    const maxRatio = Math.max(...region.map(i => cells[i].ratio));
-    if (maxRatio > darkCellRatio) cornersDetected++;
+
+  for (const corner of corners) {
+    let darkCount = 0;
+    let total = 0;
+    const cx = Math.max(minX, Math.min(maxX - cornerSize, corner.x));
+    const cy = Math.max(minY, Math.min(maxY - cornerSize, corner.y));
+    for (let y = cy; y < cy + cornerSize; y += 2) {
+      for (let x = cx; x < cx + cornerSize; x += 2) {
+        if (y < size && x < size) {
+          total++;
+          if (gray[y * size + x] < darkThreshold) darkCount++;
+        }
+      }
+    }
+    if (total > 0 && darkCount / total > 0.12) cornersDetected++;
   }
 
   if (cornersDetected >= 3) return { detected: true, reason: 'alineado' };
