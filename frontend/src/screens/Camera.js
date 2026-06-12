@@ -108,9 +108,6 @@ export async function showCameraScreen(container) {
     </div>
   `;
 
-  let lastAutoCaptureTime = 0;
-  let isProcessing = false;
-
   const video = document.getElementById('camera-video');
   const canvas = document.getElementById('calibration-canvas');
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -243,11 +240,6 @@ export async function showCameraScreen(container) {
         `;
         captureBtn.disabled = false;
         captureBtn.classList.add('animate-pulse');
-        const now = Date.now();
-        if (now - lastAutoCaptureTime > 3000 && !isProcessing) {
-          lastAutoCaptureTime = now;
-          captureBtn.click();
-        }
       } else {
         overlayStatus.innerHTML = `
           <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-red-500/90 text-white shadow-lg">
@@ -259,7 +251,7 @@ export async function showCameraScreen(container) {
         captureBtn.classList.remove('animate-pulse');
       }
     }, (result) => {
-      const map = { alinear: 'Alinea la cartilla', subir: 'Sube el celular', bajar: 'Baja el celular', quieto: 'Mantén el celular quieto', listo: '¡Listo!' };
+      const map = { alinear: 'Alinea la cartilla en el recuadro', quieto: 'Mantén el celular quieto', listo: '¡Listo!' };
       guidanceText.innerHTML = `<span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-white/90 text-gray-800 shadow-lg">${map[result.guidance] || 'Alinea la cartilla'}</span>`;
     });
   });
@@ -270,8 +262,6 @@ export async function showCameraScreen(container) {
   });
 
   captureBtn.addEventListener('click', async () => {
-    if (isProcessing) return;
-    isProcessing = true;
     captureBtn.disabled = true;
     setStatus('Capturando imagen...');
 
@@ -344,7 +334,6 @@ export async function showCameraScreen(container) {
     }
 
     resetCalibration();
-    isProcessing = false;
   });
 
   logoutBtn.addEventListener('click', async () => {

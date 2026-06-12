@@ -1,4 +1,4 @@
-const ROI_SIZE = parseInt(import.meta.env.VITE_ROI_SIZE) || 400;
+const ROI_SIZE = parseInt(import.meta.env.VITE_ROI_SIZE) || 480;
 const SHARPNESS_THRESHOLD = parseInt(import.meta.env.VITE_LAPLACIAN_THRESHOLD) || 120;
 const STABILITY_THRESHOLD = parseFloat(import.meta.env.VITE_STABILITY_THRESHOLD) || 0.12;
 const FRAME_HISTORY = 3;
@@ -56,46 +56,43 @@ export function detectCorners(pixels, size) {
   }
 
   const threshold = 60;
-  let minX = size, maxX = 0, minY = size, maxY = 0;
-  let darkCount = 0;
+  const regionRatio = 0.22;
+  const regionSize = Math.floor(size * regionRatio);
+  const margin = Math.floor(size * 0.03);
 
-  for (let y = 0; y < size; y += 2) {
-    for (let x = 0; x < size; x += 2) {
-      if (gray[y * size + x] < threshold) {
-        darkCount++;
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
+  const regions = [
+    { x: margin, y: margin },
+    { x: size - regionSize - margin, y: margin },
+    { x: margin, y: size - regionSize - margin },
+    { x: size - regionSize - margin, y: size - regionSize - margin },
+  ];
+
+  let cornersDetected = 0;
+  for (const r of regions) {
+    let darkCount = 0;
+    let sampleCount = 0;
+    for (let y = 0; y < regionSize; y += 2) {
+      for (let x = 0; x < regionSize; x += 2) {
+        const px = r.x + x;
+        const py = r.y + y;
+        if (px < size && py < size) {
+          sampleCount++;
+          if (gray[py * size + px] < threshold) {
+            darkCount++;
+          }
+        }
       }
     }
+    if (darkCount / sampleCount > 0.15) cornersDetected++;
   }
 
-  const totalPixels = (size / 2) * (size / 2);
-
-  const bboxW = maxX - minX;
-  const bboxH = maxY - minY;
-  const bboxArea = bboxW * bboxH;
-  const roiArea = size * size;
-  const coverage = bboxArea / roiArea;
-
-  if (coverage < 0.70) return { detected: false, reason: 'sin_detectar' };
-
-  const centerX = (minX + maxX) / 2;
-  const centerY = (minY + maxY) / 2;
-  const roiCenter = size / 2;
-  const maxOffset = size * 0.10;
-  const offsetX = centerX - roiCenter;
-  const offsetY = centerY - roiCenter;
-
-  if (Math.abs(offsetX) > maxOffset) return { detected: false, reason: 'sin_detectar' };
-  if (Math.abs(offsetY) > maxOffset) return { detected: false, reason: 'descentrado', offsetY };
-
-  return { detected: true, reason: 'alineado' };
+  return cornersDetected >= 3
+    ? { detected: true, reason: 'alineado' }
+    : { detected: false, reason: cornersDetected > 0 ? 'descentrado' : 'sin_detectar' };
 }
 
 export function checkCalibration(videoElement, canvas, ctx) {
-  if (!videoElement || videoElement.readyState < 2) return false;
+  if (!videoElement || videoElement.readyState < 2) return { calibrated: false, guidance: 'alinear' };
 
   const videoWidth = videoElement.videoWidth;
   const videoHeight = videoElement.videoHeight;
@@ -142,10 +139,8 @@ export function checkCalibration(videoElement, canvas, ctx) {
   let guidance = 'alinear';
   if (calibrated) {
     guidance = 'listo';
-  } else if (cornerResult.detected && (!isSharp || !isStable)) {
+  } else if (cornerResult.detected || cornerResult.reason === 'descentrado') {
     guidance = 'quieto';
-  } else if (cornerResult.reason === 'descentrado') {
-    guidance = cornerResult.offsetY > 0 ? 'subir' : 'bajar';
   }
 
   return { calibrated, guidance };
