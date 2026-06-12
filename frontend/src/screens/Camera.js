@@ -76,14 +76,14 @@ export async function showCameraScreen(container) {
       </div>
 
       <!-- Guidance text above controls -->
-      <div id="guidance-text" class="absolute z-30 bottom-28 left-0 right-0 text-center pointer-events-none">
+      <div id="guidance-text" class="absolute z-30 bottom-36 left-0 right-0 text-center pointer-events-none">
         <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-white/90 text-gray-800 shadow-lg">
           Alinea la cartilla en el recuadro
         </span>
       </div>
 
       <!-- Controls -->
-      <div class="absolute bottom-0 left-0 right-0 z-20 pb-8 pt-12 bg-gradient-to-t from-black/80 to-transparent safe-area-bottom">
+      <div class="absolute bottom-0 left-0 right-0 z-20 pb-16 pt-12 bg-gradient-to-t from-black/80 to-transparent safe-area-bottom">
         <div class="flex items-center justify-center gap-8 px-6">
           <button id="download-btn" class="p-4 rounded-full bg-white/20 backdrop-blur-md disabled:opacity-30 disabled:cursor-not-allowed active:bg-white/30 transition-all" disabled>
             <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">

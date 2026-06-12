@@ -56,39 +56,42 @@ export function detectCorners(pixels, size) {
   }
 
   const threshold = 60;
-  const regionRatio = 0.30;
-  const regionSize = Math.floor(size * regionRatio);
-  const margin = Math.floor(size * 0.04);
+  let minX = size, maxX = 0, minY = size, maxY = 0;
+  let darkCount = 0;
 
-  const regions = [
-    { x: margin, y: margin },
-    { x: size - regionSize - margin, y: margin },
-    { x: margin, y: size - regionSize - margin },
-    { x: size - regionSize - margin, y: size - regionSize - margin },
-  ];
-
-  let cornersDetected = 0;
-  for (const r of regions) {
-    let darkCount = 0;
-    let sampleCount = 0;
-    for (let y = 0; y < regionSize; y += 2) {
-      for (let x = 0; x < regionSize; x += 2) {
-        const px = r.x + x;
-        const py = r.y + y;
-        if (px < size && py < size) {
-          sampleCount++;
-          if (gray[py * size + px] < threshold) {
-            darkCount++;
-          }
-        }
+  for (let y = 0; y < size; y += 2) {
+    for (let x = 0; x < size; x += 2) {
+      if (gray[y * size + x] < threshold) {
+        darkCount++;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
       }
     }
-    if (darkCount / sampleCount > 0.10) cornersDetected++;
   }
 
-  return cornersDetected >= 2
-    ? { detected: true, reason: 'alineado' }
-    : { detected: false, reason: cornersDetected > 0 ? 'descentrado' : 'sin_detectar' };
+  const totalPixels = (size / 2) * (size / 2);
+  const darkRatio = darkCount / totalPixels;
+  if (darkRatio < 0.02) return { detected: false, reason: 'sin_detectar' };
+
+  const bboxW = maxX - minX;
+  const bboxH = maxY - minY;
+  const bboxArea = bboxW * bboxH;
+  const roiArea = size * size;
+  const coverage = bboxArea / roiArea;
+
+  if (coverage < 0.50) return { detected: false, reason: 'sin_detectar' };
+
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+  const roiCenter = size / 2;
+  const maxOffset = size * 0.15;
+
+  if (Math.abs(centerX - roiCenter) > maxOffset) return { detected: false, reason: 'sin_detectar' };
+  if (Math.abs(centerY - roiCenter) > maxOffset) return { detected: false, reason: 'descentrado' };
+
+  return { detected: true, reason: 'alineado' };
 }
 
 export function checkCalibration(videoElement, canvas, ctx, nativeRect) {
