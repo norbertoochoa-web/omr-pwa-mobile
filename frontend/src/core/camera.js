@@ -73,7 +73,7 @@ export function detectCorners(pixels, size) {
 
   const totalPixels = (size / 2) * (size / 2);
   const darkRatio = darkCount / totalPixels;
-  if (darkRatio < 0.02) return { detected: false, reason: 'sin_detectar' };
+  if (darkRatio < 0.005) return { detected: false, reason: 'sin_detectar' };
 
   const bboxW = maxX - minX;
   const bboxH = maxY - minY;
@@ -81,7 +81,7 @@ export function detectCorners(pixels, size) {
   const roiArea = size * size;
   const coverage = bboxArea / roiArea;
 
-  if (coverage < 0.50) return { detected: false, reason: 'sin_detectar' };
+  if (coverage < 0.20) return { detected: false, reason: 'sin_detectar' };
 
   const centerX = (minX + maxX) / 2;
   const centerY = (minY + maxY) / 2;
