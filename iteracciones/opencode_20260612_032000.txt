@@ -1,0 +1,88 @@
+# Resumen Completo - OMR PWA Mobile (2026-06-12 03:20)
+
+## Estado General
+- **Deteccion**: FUNCIONANDO (Opcion B: bbox blanco + cruces oscuras en esquinas)
+- **Captura**: Solo manual tocando el marco guia (auto-capture deshabilitado temporalmente)
+- **Backend**: Pendiente de revision (misma cartilla da diferente score OCR)
+
+## Repositorios y Ramas
+| Repo | Rama master | Rama main |
+|------|-------------|-----------|
+| omr-pwa-mobile (fase1) | estable | desarrollo |
+| omr-pwa-fase2 (API) | VPS deploy | desarrollo |
+| omr-pwa-fase3-portal | VPS deploy | desarrollo |
+
+- `master` = estable (default en GitHub, desplegada en VPS)
+- `main` = desarrollo
+
+## Arquitectura VPS (162.35.161.249)
+- Caddy: proxy HTTPS, sirve frontend estatico + Portal + API
+- Docker: API FastAPI (puerto 8000), Portal (puerto 8001), DB
+- Frontend: /var/www/imax-pwa/ (build de Vite)
+- Data compartida: /var/omr/data/ (bind mount)
+- URL app: https://162.35.161.249.nip.io
+- URL portal: https://162.35.161.249.nip.io/portal/ (admin@catolico.cl / qwerty1)
+
+## Funcionalidades Implementadas
+
+### Frontend Mobile (fase1)
+- [x] Login con JWT + validacion de suscripcion
+- [x] Stream de camara con overlay guiado
+- [x] Rectangulo de captura: min(92vw, 420px, calc((100dvh - 230px) * 0.63)) x min(calc(92vw / 0.63), 700px, calc(100dvh - 230px)), top-[50%]
+- [x] 3 estados de calibracion (overlay-status): rojo/amarillo/verde (pero amarillo ya no se usa)
+- [x] Deteccion de cartilla blanca (Opcion B): bbox blanco (gray>180) + cruces oscuras (gray<80) en 4 esquinas
+- [x] Captura manual: tocar el marco guia (capture-area)
+- [x] Cola offline en IndexedDB + sync
+- [x] Descarga de .txt por sesion
+- [x] PWA installable
+
+### Backend API (fase2)
+- [x] Recepcion de imagenes via POST /upload
+- [x] Procesamiento OMR con OpenCV
+- [x] Generacion de .txt compatible Delphi 7
+- [x] Dashboard de sesiones
+- [x] Galeria de imagenes con _original.jpg y _marked.jpg
+- [x] Almacenamiento multi-marcado como "ERROR" / "E"
+
+### Portal (fase3)
+- [x] Login
+- [x] Dashboard con tabla de sesiones
+- [x] Detalle de sesion con galeria
+- [x] Descarga de .txt
+
+## Algoritmos de Deteccion Probados
+1. ~Bounding box (coverage 50%, darkRatio 2%)~ Falsos positivos con fondo texturado
+2. ~4 corner regions (regionRatio 0.30, dark 0.10)~ No detectaba cruces
+3. ~Bounding box relajado (darkRatio 0.5%, coverage 20%)~ Falsos positivos
+4. ~Grid 6x6 (celdas 80px, 15%)~ No detectaba cruces pequenas
+5. ~Grid 12x12 (celdas 40px, 10%)~ Inestable
+6. ~Umbral adaptativo por celda (mean * 0.5)~ No funciono
+7. **Opcion B: bbox blanco + cruces en esquinas** FUNCIONANDO
+
+## Pendiente
+- [ ] Revisar backend: misma cartilla da diferente score OCR
+- [ ] Mejorar auto-capture (deshabilitado, code comentado en Camera.js lineas 10-11, 127)
+- [ ] Selector de camara frontal/trasera
+- [ ] Preview post-captura
+- [ ] Historial de sesiones
+
+## Archivos Clave
+- frontend/src/screens/Camera.js (~637 lines): UI camara, captura, estados
+- frontend/src/core/camera.js (~218 lines): deteccion de cartilla, calibracion
+- frontend/src/core/api.js: llamadas API
+- frontend/src/core/db.js: IndexedDB
+- frontend/src/core/state.js: estado global
+- frontend/src/style.css: estilos
+- frontend/tailwind.config.js: config Tailwind
+- frontend/vite.config.js: config Vite + PWA
+- Especificaciones/ESPECIFICACION_MOVIL.md: documento detallado de especificaciones
+
+## Como Hacer Deploy
+```bash
+ssh opencode@162.35.161.249
+cd /home/opencode/omr-pwa-mobile
+git pull origin master
+cd frontend
+npm run build
+sudo cp -r dist/* /var/www/imax-pwa/
+```
