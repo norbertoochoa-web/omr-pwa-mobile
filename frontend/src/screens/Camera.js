@@ -7,6 +7,10 @@ import { showLoginScreen } from './Login.js';
 let videoStream = null;
 let currentSessionId = null;
 let captureCount = 0;
+const AUTO_CAPTURE_FRAMES = 10;
+const AUTO_CAPTURE_COOLDOWN = 3000;
+const AUTO_RELEASE_FRAMES = 8;
+const GREEN_HOLD_MS = 850;
 
 export async function showCameraScreen(container) {
   const user = getUserData();
@@ -48,7 +52,7 @@ export async function showCameraScreen(container) {
         <!-- Dark overlay outside capture area -->
         <div class="absolute inset-0 z-10 pointer-events-none">
           <div class="absolute inset-0 bg-black/40"></div>
-          <div id="capture-area" class="absolute top-[44%] left-1/2 -translate-x-1/2 -translate-y-1/2" style="width: min(90vw, 360px); height: min(120vw, 480px);">
+          <div id="capture-area" class="absolute top-[50%] left-1/2 -translate-x-1/2 -translate-y-1/2" style="width: min(92vw, 420px, calc((100dvh - 230px) * 0.63)); height: min(calc(92vw / 0.63), 700px, calc(100dvh - 230px));">
             <div class="absolute inset-0 bg-transparent border-4 border-white rounded-xl"></div>
             
             <!-- Corner markers for alignment -->
@@ -67,20 +71,23 @@ export async function showCameraScreen(container) {
             
           </div>
         </div>
+
+        <div id="capture-feedback" class="hidden absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+          <div class="px-5 py-3 rounded-full bg-black/80 text-white text-sm font-semibold shadow-xl border border-white/10">
+            Sacando foto...
+          </div>
+        </div>
       </div>
 
       <!-- Controls -->
-      <div class="absolute bottom-0 left-0 right-0 z-20 pb-16 pt-12 bg-gradient-to-t from-black/80 to-transparent safe-area-bottom">
-        <div class="flex items-center justify-center gap-8 px-6">
+      <div class="absolute bottom-0 left-0 right-0 z-20 pb-8 pt-4 bg-gradient-to-t from-black/80 to-transparent safe-area-bottom">
+        <div class="flex items-center justify-center gap-6 px-6 -translate-y-2">
           <button id="download-btn" class="p-4 rounded-full bg-white/20 backdrop-blur-md disabled:opacity-30 disabled:cursor-not-allowed active:bg-white/30 transition-all" disabled>
             <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </button>
 
-          <button id="capture-btn" class="p-2 rounded-full bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95" disabled>
-            <div class="w-16 h-16 rounded-full border-[6px] border-gray-900"></div>
-          </button>
 
           <button id="queue-btn" class="p-4 rounded-full bg-white/20 backdrop-blur-md relative active:bg-white/30 transition-all">
             <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -102,17 +109,27 @@ export async function showCameraScreen(container) {
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const captureArea = document.getElementById('capture-area');
   const overlayStatus = document.getElementById('overlay-status');
-  const captureBtn = document.getElementById('capture-btn');
   const captureCounter = document.getElementById('capture-counter');
   const logoutBtn = document.getElementById('logout-btn');
   const syncBtn = document.getElementById('sync-btn');
   const downloadBtn = document.getElementById('download-btn');
   const queueBtn = document.getElementById('queue-btn');
   const queueBadge = document.getElementById('queue-badge');
+  const captureFeedback = document.getElementById('capture-feedback');
 
   const sessionLabel = document.getElementById('session-label');
   const apiUrlLabel = document.getElementById('api-url-label');
   apiUrlLabel.textContent = import.meta.env.VITE_API_URL || `${location.protocol}//${location.hostname}:8000/api/v1`;
+
+  let isCapturing = false;
+  let captureLockActive = false;
+  let captureReadyFrames = 0;
+  let lastCaptureTime = 0;
+  let calibrationCheckResult = null;
+  let lockReleaseFrames = 0;
+  let greenHoldUntil = 0;
+  let captureFeedbackTimer = null;
+  let audioContext = null;
 
   downloadBtn.addEventListener('click', async () => {
     if (!currentSessionId) return;
@@ -219,6 +236,10 @@ export async function showCameraScreen(container) {
   function getCalibrationRect() {
     const vw = video.videoWidth;
     const vh = video.videoHeight;
+    if (!vw || !vh) {
+      return null;
+    }
+
     const videoRect = video.getBoundingClientRect();
     const capRect = captureArea.getBoundingClientRect();
     const cw = videoRect.width;
@@ -230,44 +251,118 @@ export async function showCameraScreen(container) {
     const offsetY = (dh - ch) / 2;
     const relLeft = capRect.left - videoRect.left;
     const relTop = capRect.top - videoRect.top;
+    const marginX = capRect.width * 0.16;
+    const marginY = capRect.height * 0.12;
+    const x = Math.max(0, Math.round((relLeft - marginX + offsetX) / scale));
+    const y = Math.max(0, Math.round((relTop - marginY + offsetY) / scale));
+    const width = Math.min(vw - x, Math.round((capRect.width + marginX * 2) / scale));
+    const height = Math.min(vh - y, Math.round((capRect.height + marginY * 2) / scale));
+
     return {
-      x: Math.max(0, Math.round((relLeft + offsetX) / scale)),
-      y: Math.max(0, Math.round((relTop + offsetY) / scale)),
-      width: Math.round(capRect.width / scale),
-      height: Math.round(capRect.height / scale),
+      x,
+      y,
+      width,
+      height,
     };
   }
 
-  video.addEventListener('loadeddata', () => {
-    console.log('Video loaded, starting calibration');
-    const nativeRect = getCalibrationRect();
-    startCalibration(video, canvas, ctx, (result) => {
-      if (result.calibrated) {
-        captureBtn.disabled = false;
-        captureBtn.classList.add('animate-pulse');
-      } else {
-        captureBtn.disabled = true;
-        captureBtn.classList.remove('animate-pulse');
+  function setCaptureFeedback(message) {
+    if (!captureFeedback) return;
+    const bubble = captureFeedback.firstElementChild;
+    if (bubble) bubble.textContent = message;
+    captureFeedback.classList.remove('hidden');
+    clearTimeout(captureFeedbackTimer);
+    captureFeedbackTimer = setTimeout(() => {
+      captureFeedback.classList.add('hidden');
+    }, 750);
+  }
+
+  function hideCaptureFeedback() {
+    if (!captureFeedback) return;
+    clearTimeout(captureFeedbackTimer);
+    captureFeedback.classList.add('hidden');
+  }
+
+  function playCaptureSound() {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    try {
+      if (!audioContext) {
+        audioContext = new AudioCtx();
       }
-    }, (result) => {
-      const map = {
-        alinear: { text: 'Alinea la cartilla en el recuadro', cls: 'bg-red-500/90', pulse: true },
-        quieto: { text: 'Mantén el celular quieto', cls: 'bg-yellow-500/90', pulse: true },
-        listo: { text: '¡Listo!', cls: 'bg-green-500/90', pulse: false },
-      };
-      const state = map[result.guidance] || map.alinear;
-      overlayStatus.innerHTML = `<span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold ${state.cls} text-white shadow-lg">${state.pulse ? '<span class="w-2.5 h-2.5 bg-white rounded-full mr-2 animate-pulse"></span>' : '<span class="w-2.5 h-2.5 bg-white rounded-full mr-2"></span>'}${state.text}</span>`;
-    }, nativeRect);
-  });
+      if (audioContext.state === 'suspended') {
+        audioContext.resume().catch(() => {});
+      }
+      const now = audioContext.currentTime;
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = 760;
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.12, now + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.13);
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.start(now);
+      oscillator.stop(now + 0.14);
+    } catch (err) {
+      console.warn('[AUDIO] capture sound failed:', err);
+    }
+  }
 
-  video.addEventListener('error', (e) => {
-    console.error('Video error:', e);
-    showToast('Error al cargar la cámara');
-  });
+  function updateCaptureUi(result) {
+    const now = performance.now();
+    if (result.canCapture && !captureLockActive) {
+      greenHoldUntil = now + GREEN_HOLD_MS;
+      captureReadyFrames++;
+      lockReleaseFrames = 0;
+    } else if (captureLockActive) {
+      captureReadyFrames = 0;
+      if (!result.canCapture) {
+        lockReleaseFrames++;
+        if (lockReleaseFrames >= AUTO_RELEASE_FRAMES) {
+          captureLockActive = false;
+          lockReleaseFrames = 0;
+          greenHoldUntil = 0;
+        }
+      }
+    } else {
+      captureReadyFrames = 0;
+      if (!result.canCapture) {
+        greenHoldUntil = 0;
+      }
+    }
 
-  captureBtn.addEventListener('click', async () => {
-    captureBtn.disabled = true;
-    setStatus('Capturando imagen...');
+    const uiReady = (result.canCapture || now < greenHoldUntil) && !captureLockActive;
+
+    const onCooldown = (now - lastCaptureTime) < AUTO_CAPTURE_COOLDOWN;
+
+    const map = {
+      alinear: { text: captureLockActive ? 'Cambia de cartilla' : 'Alinea la cartilla en el recuadro', cls: 'bg-red-500/90', pulse: true },
+      listo: { text: captureLockActive ? 'Foto tomada' : 'Toca el marco para capturar', cls: 'bg-green-500/90', pulse: false },
+    };
+    const state = uiReady ? map.listo : map.alinear;
+    overlayStatus.innerHTML = `<span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold ${state.cls} text-white shadow-lg">${state.pulse ? '<span class="w-2.5 h-2.5 bg-white rounded-full mr-2 animate-pulse"></span>' : '<span class="w-2.5 h-2.5 bg-white rounded-full mr-2"></span>'}${state.text}</span>`;
+
+    if (!isCapturing && result.canCapture && !captureLockActive && !onCooldown && captureReadyFrames >= AUTO_CAPTURE_FRAMES) {
+      captureReadyFrames = 0;
+      void captureCurrentFrame('auto');
+    }
+  }
+
+  async function captureCurrentFrame(source = 'manual') {
+    if (isCapturing || !video.videoWidth || !video.videoHeight) return;
+
+    isCapturing = true;
+    lastCaptureTime = performance.now();
+    captureLockActive = true;
+    captureReadyFrames = 0;
+    lockReleaseFrames = 0;
+    greenHoldUntil = 0;
+    setStatus('Sacando foto...');
+    setCaptureFeedback('Sacando foto...');
+    playCaptureSound();
+    if (navigator.vibrate) navigator.vibrate([25, 20, 25]);
 
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = video.videoWidth;
@@ -281,7 +376,6 @@ export async function showCameraScreen(container) {
     let queueId;
     try {
       queueId = await addToQueue(imageData, sessionId);
-      if (navigator.vibrate) navigator.vibrate(30);
     } catch (err) {
       console.error('[QUEUE] error:', err);
     }
@@ -289,14 +383,16 @@ export async function showCameraScreen(container) {
 
     captureCount++;
     captureCounter.textContent = `${captureCount} captura${captureCount !== 1 ? 's' : ''}`;
-    showToast('Procesando...');
+    showToast(source === 'auto' ? 'Captura automática' : 'Procesando...');
 
-    // --- UPLOAD DIRECTO ---
     const baseUrl = import.meta.env.VITE_API_URL || `${location.protocol}//${location.hostname}:8000/api/v1`;
     const token = sessionStorage.getItem('omr_jwt_token');
     if (!token) {
       setStatus('Error: sesión expirada', true);
       resetCalibration();
+      captureLockActive = false;
+      isCapturing = false;
+      hideCaptureFeedback();
       return;
     }
 
@@ -324,8 +420,7 @@ export async function showCameraScreen(container) {
       if (queueId) await updateStatus(queueId, 'SUCCESS');
       setStatus(`Captura ${captureCount} OK (score: ${result.score}/${result.total})`);
       showToast(`✓ Score: ${result.score}/${result.total}`);
-      // Mostrar resumen rápido
-      const correctas = Object.values(result.verdicts || {}).filter(v => v === 'Correct').length;
+      const correctas = Object.values(result.verdicts || {}).filter((v) => v === 'Correct').length;
       const incorrectas = (result.total || 0) - correctas;
       setStatus(`✓ ${correctas}/${result.total} correctas (${incorrectas} incorrectas)`);
       showToast(`Score: ${result.score}/${result.total}`);
@@ -335,9 +430,32 @@ export async function showCameraScreen(container) {
       const detail = err?.detail || err?.message || err?.status || 'Error desconocido';
       setStatus(`Error: ${String(detail).slice(0, 55)}`, true);
       showToast('Error al procesar');
+    } finally {
+      resetCalibration();
+      isCapturing = false;
+      hideCaptureFeedback();
     }
+  }
 
-    resetCalibration();
+  video.addEventListener('loadeddata', () => {
+    console.log('Video loaded, starting calibration');
+    startCalibration(video, canvas, ctx, () => {}, (result) => {
+      calibrationCheckResult = result;
+      updateCaptureUi(result);
+    }, getCalibrationRect);
+  });
+
+  video.addEventListener('error', (e) => {
+    console.error('Video error:', e);
+    showToast('Error al cargar la cámara');
+  });
+
+  captureArea.addEventListener('click', async (e) => {
+    if (isCapturing) return;
+    const result = calibrationCheckResult;
+    if (result && result.canCapture) {
+      await captureCurrentFrame('manual');
+    }
   });
 
   logoutBtn.addEventListener('click', async () => {
