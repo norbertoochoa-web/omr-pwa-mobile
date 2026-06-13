@@ -52,7 +52,7 @@ export async function showCameraScreen(container) {
         <!-- Dark overlay outside capture area -->
         <div class="absolute inset-0 z-10 pointer-events-none">
           <div class="absolute inset-0 bg-black/40"></div>
-          <div id="capture-area" class="absolute top-[50%] left-1/2 -translate-x-1/2 -translate-y-1/2" style="width: min(92vw, 420px, calc((100dvh - 230px) * 0.63)); height: min(calc(92vw / 0.63), 700px, calc(100dvh - 230px));">
+          <div id="capture-area" class="absolute top-[50%] left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-auto" style="width: min(92vw, 420px, calc((100dvh - 230px) * 0.63)); height: min(calc(92vw / 0.63), 700px, calc(100dvh - 230px));">
             <div class="absolute inset-0 bg-transparent border-4 border-white rounded-xl"></div>
             
             <!-- Corner markers for alignment -->
