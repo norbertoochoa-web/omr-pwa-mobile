@@ -7,8 +7,8 @@ import { showLoginScreen } from './Login.js';
 let videoStream = null;
 let currentSessionId = null;
 let captureCount = 0;
-const AUTO_CAPTURE_FRAMES = 10;
-const AUTO_CAPTURE_COOLDOWN = 3000;
+// const AUTO_CAPTURE_FRAMES = 10;
+// const AUTO_CAPTURE_COOLDOWN = 3000;
 const AUTO_RELEASE_FRAMES = 8;
 const GREEN_HOLD_MS = 850;
 
@@ -124,7 +124,7 @@ export async function showCameraScreen(container) {
   let isCapturing = false;
   let captureLockActive = false;
   let captureReadyFrames = 0;
-  let lastCaptureTime = 0;
+  // let lastCaptureTime = 0;
   let calibrationCheckResult = null;
   let lockReleaseFrames = 0;
   let greenHoldUntil = 0;
@@ -335,26 +335,18 @@ export async function showCameraScreen(container) {
 
     const uiReady = (result.canCapture || now < greenHoldUntil) && !captureLockActive;
 
-    const onCooldown = (now - lastCaptureTime) < AUTO_CAPTURE_COOLDOWN;
-
     const map = {
       alinear: { text: captureLockActive ? 'Cambia de cartilla' : 'Alinea la cartilla en el recuadro', cls: 'bg-red-500/90', pulse: true },
       listo: { text: captureLockActive ? 'Foto tomada' : 'Toca el marco para capturar', cls: 'bg-green-500/90', pulse: false },
     };
     const state = uiReady ? map.listo : map.alinear;
     overlayStatus.innerHTML = `<span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold ${state.cls} text-white shadow-lg">${state.pulse ? '<span class="w-2.5 h-2.5 bg-white rounded-full mr-2 animate-pulse"></span>' : '<span class="w-2.5 h-2.5 bg-white rounded-full mr-2"></span>'}${state.text}</span>`;
-
-    if (!isCapturing && result.canCapture && !captureLockActive && !onCooldown && captureReadyFrames >= AUTO_CAPTURE_FRAMES) {
-      captureReadyFrames = 0;
-      void captureCurrentFrame('auto');
-    }
   }
 
   async function captureCurrentFrame(source = 'manual') {
     if (isCapturing || !video.videoWidth || !video.videoHeight) return;
 
     isCapturing = true;
-    lastCaptureTime = performance.now();
     captureLockActive = true;
     captureReadyFrames = 0;
     lockReleaseFrames = 0;
