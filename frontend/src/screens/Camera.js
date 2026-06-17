@@ -452,10 +452,7 @@ export async function showCameraScreen(container) {
 
   captureArea.addEventListener('click', async (e) => {
     if (isCapturing) return;
-    const result = calibrationCheckResult;
-    if (result && result.canCapture) {
-      await captureCurrentFrame('manual');
-    }
+    await captureCurrentFrame('manual');
   });
 
   logoutBtn.addEventListener('click', async () => {

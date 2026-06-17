@@ -106,7 +106,7 @@ export function detectCorners(pixels, size) {
   const bboxArea = bboxW * bboxH;
   const roiArea = size * size;
   const coverage = bboxArea / roiArea;
-  if (coverage < 0.30) {
+  if (coverage < 0.18) {
     return { detected: false, reason: 'sin_detectar', detail: 'cartilla_lejana' };
   }
 
