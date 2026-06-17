@@ -52,7 +52,7 @@ export async function showCameraScreen(container) {
         <!-- Dark overlay outside capture area -->
         <div class="absolute inset-0 z-10 pointer-events-none">
           <div class="absolute inset-0 bg-black/40"></div>
-          <div id="capture-area" class="absolute top-[50%] left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-auto" style="width: min(92vw, 420px, calc((100dvh - 230px) * 0.63)); height: min(calc(92vw / 0.63), 700px, calc(100dvh - 230px));">
+          <div id="capture-area" class="absolute top-[50%] left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-auto" style="width: min(96vw, 520px, calc((100dvh - 230px) * 0.695)); height: min(calc(96vw / 0.695), 820px, calc(100dvh - 230px));">
             <div class="absolute inset-0 bg-transparent border-4 border-white rounded-xl"></div>
             
             <!-- Corner markers for alignment -->
@@ -251,8 +251,9 @@ export async function showCameraScreen(container) {
     const offsetY = (dh - ch) / 2;
     const relLeft = capRect.left - videoRect.left;
     const relTop = capRect.top - videoRect.top;
-    const marginX = capRect.width * 0.16;
-    const marginY = capRect.height * 0.12;
+    // Tight ROI: keep only a small safety margin (≈3%) around the visible frame
+    const marginX = capRect.width * 0.03;
+    const marginY = capRect.height * 0.03;
     const x = Math.max(0, Math.round((relLeft - marginX + offsetX) / scale));
     const y = Math.max(0, Math.round((relTop - marginY + offsetY) / scale));
     const width = Math.min(vw - x, Math.round((capRect.width + marginX * 2) / scale));
