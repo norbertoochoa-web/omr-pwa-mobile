@@ -53,6 +53,9 @@ export default defineConfig({
       protocol: 'wss',
       host: '0.0.0.0',
     },
+    proxy: {
+      '/api': 'http://localhost:8000',
+    },
   },
 
   build: {

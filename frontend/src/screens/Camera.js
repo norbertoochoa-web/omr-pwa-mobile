@@ -357,11 +357,18 @@ export async function showCameraScreen(container) {
     playCaptureSound();
     if (navigator.vibrate) navigator.vibrate([25, 20, 25]);
 
+    const rect = getCalibrationRect();
     const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = video.videoWidth;
-    tempCanvas.height = video.videoHeight;
+    const cw = rect ? rect.width : video.videoWidth;
+    const ch = rect ? rect.height : video.videoHeight;
+    tempCanvas.width = cw;
+    tempCanvas.height = ch;
     const tempCtx = tempCanvas.getContext('2d');
-    tempCtx.drawImage(video, 0, 0);
+    if (rect) {
+      tempCtx.drawImage(video, rect.x, rect.y, rect.width, rect.height, 0, 0, cw, ch);
+    } else {
+      tempCtx.drawImage(video, 0, 0);
+    }
 
     const imageData = tempCanvas.toDataURL('image/jpeg', 0.85);
     const sessionId = currentSessionId;
