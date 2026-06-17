@@ -6,7 +6,7 @@ const app = document.getElementById('app');
 
 async function init() {
   const params = new URLSearchParams(window.location.search);
-  const ssoToken = params.get('sso_token');
+  const ssoToken = params.get('sso_token') || params.get('token');
 
   if (ssoToken && !isAuthenticated()) {
     try {
