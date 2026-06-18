@@ -97,7 +97,7 @@ export function detectCorners(pixels, size) {
 
   const totalSamples = (size / 2) * (size / 2);
   const brightRatio = brightCount / totalSamples;
-  if (brightRatio < 0.10 || brightCount < 50) {
+  if (brightRatio < 0.15 || brightCount < 50) {
     return { detected: false, reason: 'sin_detectar', detail: 'brillo_bajo' };
   }
 
@@ -106,7 +106,7 @@ export function detectCorners(pixels, size) {
   const bboxArea = bboxW * bboxH;
   const roiArea = size * size;
   const coverage = bboxArea / roiArea;
-  if (coverage < 0.18) {
+  if (coverage < 0.65) {
     return { detected: false, reason: 'sin_detectar', detail: 'cartilla_lejana' };
   }
 

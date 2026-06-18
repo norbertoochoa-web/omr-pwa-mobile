@@ -1,0 +1,31 @@
+=== RESUMEN 2026-06-17 ===
+
+[SSO - Login automático QR]
+- Frontend main.js: leer token param como fallback de sso_token en URL
+- Backend auth.py: endpoint POST /auth/sso, acepta types qr_access y pwa_sso
+- Backend auth.py: busca usuario via client_users JOIN por email (no sessions)
+- Se agregó logger.warning para debug de tokens inválidos
+- VITE_API_URL cambiado a /api/v1 (relativo, funciona via Caddy proxy)
+- vite.config.js: proxy /api → localhost:8000 para dev local
+
+[Recorte de captura al ROI]
+- Camera.js captureCurrentFrame(): ahora usa getCalibrationRect() para recortar solo el área de la cartilla en vez de enviar el frame completo de la cámara
+- camera.js detectCorners(): coverage mínimo 0.18 (informativo)
+- Camera.js: tap siempre captura, indicador verde/rojo es solo guía visual no bloqueante
+
+[Documentación]
+- Creado README.md con changelog en cada repo
+- Actualizado especificaciones/DEPLOYMENT.md: clarificado que "local" = notebook, workflow 4 pasos
+- Creado Backup/2026-06-17/ con respaldo de fuentes
+
+[Sincronización notebook ↔ VPS]
+- FASE2: cherry-pick 2 commits de VPS master a local main (SSO fixes)
+- MOBILE: patch commit 2e36521 a VPS master (SSO fix), y commits 7d355dd, 8c9f7d4
+- Limpiado /var/omr/data/outputs/catolico/ en VPS
+
+[Estado actual]
+- Frontend: OK (SSO, recorte ROI, tap manual)
+- Backend API: OK (umbral mixto gap+otsu, safety cap, SSO endpoint)
+- Portal: OK (QR, galería, descargas)
+- Todos los repos sincronizados entre notebook y VPS (rama master)
+- Sin push a GitHub (esperando versión estable)
