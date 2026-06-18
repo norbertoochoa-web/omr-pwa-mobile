@@ -1,0 +1,68 @@
+=== RESUMEN SESIÓN 2026-06-18 ===
+
+--- Repositorios ---
+- omr-pwa-fase1/     : Mobile PWA (frontend Vite)
+- omr-pwa-fase2/     : API Backend (FastAPI + OMR engine)
+- omr-pwa-fase3-portal/ : Portal Web (FastAPI + Jinja2)
+
+--- Cambios realizados ---
+
+[MÓVIL - Flash/Torch]
+- Agregado toggle de flash en header superior (icono rayo SVG)
+- Solo visible si el dispositivo soporta torch (check getCapabilities())
+- Feedback visual: fondo amarillo (bg-yellow-400/30) cuando encendido
+- Se apaga al hacer logout o al cerrar cámara (stopCamera)
+- Variables: flashOn (bool), videoTrack (ref)
+- Build: npm run build -> rsync a /var/www/imax-pwa/
+
+[PORTAL - Session Detail (VER)]
+- Bug: TemplateResponse faltaba 'request' como primer arg (Starlette 1.3.0 cambió signature)
+- Antes: templates.TemplateResponse("portal/session.html", {...})
+- Después: templates.TemplateResponse(request, "portal/session.html", {...})
+- Archivo: app/routes/portal.py:279
+
+[PORTAL - TXT Download]
+- Creado app/services/txt_service.py (antes no existía -> ModuleNotFoundError)
+- Copiado desde fase2 con import corregido (models_db en vez de models)
+
+[PORTAL - DB Connection]
+- Agregado pool_recycle=3600 y pool_pre_ping=True a create_async_engine
+- Archivo: app/database.py
+
+[PORTAL - Caddy /data/ ruta]
+- Agregado handle_path /data/* -> root /var/omr/data en Caddyfile
+- Necesario para servir imágenes marcadas/originales en vista VER
+
+[PORTAL - PWA_BASE_URL]
+- Corregido de https://app.imaxing.cl a https://162.35.161.249.nip.io
+- .env local y VPS actualizados
+
+[PORTAL - Infra]
+- Agregado volume mount ./app:/app/app en docker-compose.yml
+- Permite rsync de código sin rebuildear imagen
+
+[LIMPIEZA]
+- Eliminadas todas las sesiones e imágenes de BD
+- Eliminados archivos output en /var/omr/data/outputs/
+- Dashboard portal vacío para empezar pruebas nuevas
+
+--- Ideas Futuras ---
+
+[FLASH AUTOMÁTICO]
+- Detección de baja luminosidad en el frame:
+  - Usar valores de píxeles en computeLaplacianVariance o detectCorners
+  - Si brillo promedio < umbral, mostrar toast: "Activa el flash"
+- Detección de score bajo después del scan:
+  - API devuelve result.score / result.total
+  - Si score < umbral (ej: 3/5), toast: "Baja calidad, prueba con flash"
+- Auto-on: encender flash automáticamente al abrir cámara
+- Recordar preferencia en localStorage
+
+--- Estado Actual ---
+- Flash toggle: implementado y desplegado
+- VER button: funcionando (muestra cartillas procesadas)
+- TXT button: funcionando (descarga archivo .txt)
+- Dashboard: sesiones limpias
+- PWA_URL: https://162.35.161.249.nip.io
+- Portal URL: https://162.35.161.249.nip.io/portal/
+- API URL: https://162.35.161.249.nip.io/api/
