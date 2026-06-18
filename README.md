@@ -6,6 +6,7 @@ Frontend PWA para captura y procesamiento OMR de cartillas de respuestas.
 
 | Fecha | Modelo IA | Archivo(s) | Cambio |
 |---|---|---|---|
+| 2026-06-17 | deepseek-v4-flash-free | `frontend/src/screens/Camera.js` | Fix: agregar botón flotante de captura + debounce 2seg para UX rápida (50 cartillas) |
 | 2026-06-17 | deepseek-v4-flash-free | `frontend/src/core/camera.js` | Fix: subir brightRatio 0.10→0.15 y coverage 0.18→0.65 para forzar cartilla más cerca del marco |
 | 2026-06-17 | deepseek-v4-flash-free | `frontend/src/main.js` | Fix: leer `token` param como fallback de `sso_token` en URL |
 | 2026-06-17 | deepseek-v4-flash-free | `frontend/src/screens/Camera.js` | Fix: recortar captura al ROI de la cartilla (evitar enviar frame completo al backend) |

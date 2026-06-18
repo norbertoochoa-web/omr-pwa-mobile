@@ -88,6 +88,10 @@ export async function showCameraScreen(container) {
             </svg>
           </button>
 
+          <!-- Capture Button -->
+          <button id="capture-btn" class="w-20 h-20 rounded-full bg-white/30 backdrop-blur-md border-4 border-white flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 transition-all shadow-xl" disabled>
+            <div class="w-14 h-14 rounded-full bg-white"></div>
+          </button>
 
           <button id="queue-btn" class="p-4 rounded-full bg-white/20 backdrop-blur-md relative active:bg-white/30 transition-all">
             <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -113,6 +117,7 @@ export async function showCameraScreen(container) {
   const logoutBtn = document.getElementById('logout-btn');
   const syncBtn = document.getElementById('sync-btn');
   const downloadBtn = document.getElementById('download-btn');
+  const captureBtn = document.getElementById('capture-btn');
   const queueBtn = document.getElementById('queue-btn');
   const queueBadge = document.getElementById('queue-badge');
   const captureFeedback = document.getElementById('capture-feedback');
@@ -130,6 +135,7 @@ export async function showCameraScreen(container) {
   let greenHoldUntil = 0;
   let captureFeedbackTimer = null;
   let audioContext = null;
+  let captureButtonEnabledUntil = 0;  // Debounce: mantener botón habilitado hasta este timestamp
 
   downloadBtn.addEventListener('click', async () => {
     if (!currentSessionId) return;
@@ -317,6 +323,8 @@ export async function showCameraScreen(container) {
       greenHoldUntil = now + GREEN_HOLD_MS;
       captureReadyFrames++;
       lockReleaseFrames = 0;
+      // Debounce: una vez que está ready, mantener botón habilitado por 2 segundos
+      captureButtonEnabledUntil = now + 2000;
     } else if (captureLockActive) {
       captureReadyFrames = 0;
       if (!result.canCapture) {
@@ -335,10 +343,25 @@ export async function showCameraScreen(container) {
     }
 
     const uiReady = (result.canCapture || now < greenHoldUntil) && !captureLockActive;
+    const buttonEnabled = (result.canCapture || now < captureButtonEnabledUntil) && !captureLockActive;
+
+    // Actualizar estado del botón de captura
+    if (captureBtn) {
+      captureBtn.disabled = !buttonEnabled;
+      if (buttonEnabled) {
+        captureBtn.classList.remove('opacity-30');
+        captureBtn.classList.add('bg-green-500/50', 'border-green-400');
+        captureBtn.classList.remove('bg-white/30', 'border-white');
+      } else {
+        captureBtn.classList.add('opacity-30');
+        captureBtn.classList.remove('bg-green-500/50', 'border-green-400');
+        captureBtn.classList.add('bg-white/30', 'border-white');
+      }
+    }
 
     const map = {
       alinear: { text: captureLockActive ? 'Cambia de cartilla' : 'Alinea la cartilla en el recuadro', cls: 'bg-red-500/90', pulse: true },
-      listo: { text: captureLockActive ? 'Foto tomada' : 'Toca el marco para capturar', cls: 'bg-green-500/90', pulse: false },
+      listo: { text: captureLockActive ? 'Foto tomada' : 'Presiona el botón para capturar', cls: 'bg-green-500/90', pulse: false },
     };
     const state = uiReady ? map.listo : map.alinear;
     overlayStatus.innerHTML = `<span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold ${state.cls} text-white shadow-lg">${state.pulse ? '<span class="w-2.5 h-2.5 bg-white rounded-full mr-2 animate-pulse"></span>' : '<span class="w-2.5 h-2.5 bg-white rounded-full mr-2"></span>'}${state.text}</span>`;
@@ -450,7 +473,8 @@ export async function showCameraScreen(container) {
     showToast('Error al cargar la cámara');
   });
 
-  captureArea.addEventListener('click', async (e) => {
+  // Botón de captura
+  captureBtn.addEventListener('click', async (e) => {
     if (isCapturing) return;
     await captureCurrentFrame('manual');
   });
